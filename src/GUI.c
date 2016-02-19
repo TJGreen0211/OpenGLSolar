@@ -1,27 +1,60 @@
 #include "GUI.h"
 #include <stdio.h>
 
-GLuint GUIShader;
+GLuint UIShader, UITexture;
+GLuint UIvao, UIvbo;
+
+void buttonActionListener()
+{
+}
+
+float *changeCoordinates(float posx, float posy, float size, float array[]) {
+	float aspect = 800.0/1400.0;
+	
+	float oglCoordx = ((posx/1400.0)*2.0 - 1.0);
+	float oglCoordy = (posy/800.0)*2.0 - 1.0;
+	
+	float oglpx = ((posx-size)/1400.0)*2.0-1.0;
+	float oglpy = (((posy-size)/800.0)*2.0-1.0);
+	
+	printf("%f, %f, %f, %f, %f\n\n", oglCoordx, oglCoordy, oglpx, oglpy, aspect);
+	
+	float a1[] = {
+		oglCoordx,  oglCoordy, 0.0f, 	1.0f, 1.0f, // Top Right
+    	oglCoordx, 	oglpy, 0.0f, 1.0f, 0.0f, // Bottom Right
+    	oglpx,  oglCoordy, 0.0f,	0.0f, 1.0f,  // Top Left 
+    
+    	oglCoordx, oglpy, 0.0f, 1.0f, 0.0f, // Bottom Right
+    	oglpx, oglpy, 0.0f, 0.0f, 0.0f, // Bottom Left
+    	oglpx,  oglCoordy, 0.0f,	0.0f, 1.0f,  // Top Left 
+	};
+	
+	for(int i = 0; i < 30; i++)
+		array[i] = a1[i];
+	
+	return array;
+
+}
 
 void attachGUIShaders()
 {
-	createShader(&GUIShader, "src/shaders/UI.vert",
+	createShader(&UIShader, "src/shaders/UI.vert",
 		"src/shaders/UI.frag");
 }
 
-void initUI() {
-	/*
-	glGenVertexArrays(1, &vao);
-	glGenBuffers(1, &vbo);
-	glGenBuffers(1, &ebo);
-	glBindVertexArray(vao);
+void initButton(float topx, float topy, float size) {
+	float UIVertices[30] = {0};
+	*UIVertices = *changeCoordinates(topx, topy, size, UIVertices);
+	attachGUIShaders();
 	
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(texPosition), texPosition, GL_STATIC_DRAW);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+	glGenVertexArrays(1, &UIvao);
+	glBindVertexArray(UIvao);
+	glGenBuffers(1, &UIvbo);
+	glBindBuffer(GL_ARRAY_BUFFER, UIvbo);
 	
-	vPosition = glGetAttribLocation(UIShader, "vPosition");
+	glBufferData(GL_ARRAY_BUFFER, sizeof(UIVertices), UIVertices, GL_STATIC_DRAW);
+	
+	GLuint vPosition = glGetAttribLocation(UIShader, "vPosition");
 	glVertexAttribPointer(vPosition, 3, GL_FLOAT, GL_FALSE, 5*sizeof(GLfloat), BUFFER_OFFSET(0));
 	glEnableVertexAttribArray(vPosition);
 	
@@ -30,43 +63,37 @@ void initUI() {
 	glEnableVertexAttribArray(texCoord);
 	
 	glBindVertexArray(0);
-	*/
 }
+
 
 
 void drawUI()
 {	
-	/*
-	glDisable(GL_DEPTH_TEST);
-		
-	glUseProgram(UIShader);
-	
-	GLuint texture1;
-	int width, height;
-	unsigned char* image;
-	
-	glGenTextures(1, &texture1);
-	glBindTexture(GL_TEXTURE_2D, texture1);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	
-	image = SOIL_load_image("/Users/tylergreen/Documents/Programming/OpenGLProj/include/textures/container.jpg", 
-		&width, &height, 0, SOIL_LOAD_RGB);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, image);
-	glGenerateMipmap(GL_TEXTURE_2D);
-	SOIL_free_image_data(image);
-	glBindTexture(GL_TEXTURE_2D, 0);
-	
+	UITexture = loadTexture("include/textures/button.png");
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, texture1);
-	glUniform1i(glGetUniformLocation(UIShader, "newTexture1"), 0);
+    glBindTexture(GL_TEXTURE_2D, UITexture);
+    glUniform1i(glGetUniformLocation(UIShader, "tex"), 0);
 	
-	glBindVertexArray(vao);
-	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
+	glDepthMask(GL_FALSE);
+	glUseProgram(UIShader);
+	glBindVertexArray(UIvao);
+	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glBindVertexArray(0);
-		
 	glEnable(GL_DEPTH_TEST);
-	*/
+	glEnable(GL_CULL_FACE);
+	glDepthMask(GL_TRUE);
+}
+
+imgButton drawButton(float topx, float topy, float size)
+{
+	imgButton b;
+	b.xTopRight = topx;
+	b.xTopLeft = topx-size;
+	b.yTopRight = 800-topy;
+	b.yBottomRight = 800-(topy-size);
+	initButton(topx, topy, size);
+	
+	return b;
 }

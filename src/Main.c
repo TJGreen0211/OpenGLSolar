@@ -23,8 +23,12 @@ typedef struct planetParameters {
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 GLuint loadShader(char *vertex_path, char *fragement_path);
 
+int mousePosX, mousePosY;
+imgButton button1;
+	
 const float WIDTH = 1400, HEIGHT = 800;
 float ASPECT = WIDTH/HEIGHT;
 
@@ -64,6 +68,16 @@ mat4 modelMatrices[11];
 float orbitSpeedArray[11] = {0};
 float rotationSpeedArray[11] = {0};
 vec4 light_position = {0.0, 0.0, -400.0, 1.0}; 
+
+float getScreenWidth()
+{
+	return HEIGHT;
+}
+
+float getScreenHeight()
+{
+	return WIDTH;
+}
 
 char* getCurrentDirectory()
 {
@@ -605,6 +619,7 @@ GLFWwindow *setupGLFW() {
 	glfwSetKeyCallback(window, key_callback);
 	glfwSetCursorPosCallback(window, mouse_callback);
 	glfwSetScrollCallback(window, scroll_callback);
+	glfwSetMouseButtonCallback(window, mouse_button_callback);
 	return window;
 }
 
@@ -644,6 +659,8 @@ int main(int argc, char *argv[])
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_MULTISAMPLE);
 	glCullFace(GL_BACK);
+
+	button1 = drawButton(1300.0, 700.0, 100.0);
 	
 	float fpsFrames= 0;
 	float lastTime = 0;
@@ -674,6 +691,7 @@ int main(int argc, char *argv[])
 		drawPlanet();
 		drawObj();
 		drawMoon();
+		drawUI();
 		
 		if(stopRotation == 0){
 			for(int i = 0; i < 11; i++)
@@ -740,6 +758,19 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 	if (state == GLFW_PRESS)
 	{
 		processMouseMovement(xpos, ypos);
+	}
+	mousePosX = xpos;
+	mousePosY = ypos;
+}
+
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+	if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS && mousePosX <= button1.xTopRight && mousePosX >= button1.xTopLeft && mousePosY >= button1.yTopRight && mousePosY <= button1.yBottomRight)
+	{
+		if(stopRotation == 0)
+			stopRotation = 1;
+		else
+			stopRotation = 0;
+		//printf("xR: %f, xL: %f, yR: %f, rB: %f\n", button1.xTopRight, button1.xTopLeft, button1.yTopRight, button1.yBottomRight);
 	}
 }
 

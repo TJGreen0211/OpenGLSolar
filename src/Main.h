@@ -14,6 +14,7 @@
 #include "Camera.h"
 #include "Sphere.h"
 #include "Obj.h"
+#include "GUI.h"
 #include "../include/SOIL/src/SOIL.h"
 
 

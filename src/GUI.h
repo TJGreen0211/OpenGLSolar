@@ -12,6 +12,18 @@
 #include "../include/SOIL/src/SOIL.h"
 #include "Common.h"
 
+typedef struct imgButton {
+	float xTopRight;
+	float xTopLeft;
+	float yTopRight;
+	float yBottomRight;
+} imgButton;
+
+
+imgButton drawButton(float topx, float topy, float size);
+void drawUI();
+void getButtonCoordinates();
+
 #define BUFFER_OFFSET( offset )   ((char*)NULL+(offset))
 
 #endif

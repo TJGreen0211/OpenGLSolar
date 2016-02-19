@@ -3,7 +3,6 @@
 in vec3 vPosition;
 in vec2 texCoord;
 
-out vec4 color;
 out vec2 TexCoord;
 
 void main()

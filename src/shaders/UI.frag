@@ -1,6 +1,5 @@
 #version 410
 
-in vec4 color;
 in vec2 TexCoord;
 
 out vec4 FragColor;
