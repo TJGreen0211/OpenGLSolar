@@ -17,12 +17,17 @@ typedef struct imgButton {
 	float xTopLeft;
 	float yTopRight;
 	float yBottomRight;
+	float *pointArray;
+	int size;
+	int state;
+	int texture;
 } imgButton;
 
 
-imgButton drawButton(float topx, float topy, float size);
-void drawUI();
-void getButtonCoordinates();
+imgButton initButton(float topx, float topy, float size, imgButton button, char* texture);
+void drawButton();
+void buttonState(int state);
+void attachGUIShaders();
 
 #define BUFFER_OFFSET( offset )   ((char*)NULL+(offset))
 

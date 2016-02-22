@@ -27,7 +27,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 GLuint loadShader(char *vertex_path, char *fragement_path);
 
 int mousePosX, mousePosY;
-imgButton button1;
+imgButton button1, button2;
 	
 const float WIDTH = 1400, HEIGHT = 800;
 float ASPECT = WIDTH/HEIGHT;
@@ -643,6 +643,9 @@ int main(int argc, char *argv[])
 	GLFWwindow *window = setupGLFW();
 	GLuint skyboxTexture = initCubemap();
 	
+	//GLFWwindow* window2 = glfwCreateWindow(500, 500, "SolarSystem", NULL, NULL);
+	//glfwMakeContextCurrent(window2);
+	
 	/*Cross platform compatibility stuff uncomment if not on mac
 	GLenum err = glewInit();
 	if (GLEW_OK != err)
@@ -656,11 +659,13 @@ int main(int argc, char *argv[])
 	init();
 	createPerspectiveMatrix();
 	
+	button1 = initButton(1300.0, 700.0, 100.0, button1, "include/textures/buttons/button.png");
+	button2 = initButton(700.0, 700.0, 100.0, button2, "include/textures/buttonUp.png");
+	
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_MULTISAMPLE);
 	glCullFace(GL_BACK);
-
-	button1 = drawButton(1300.0, 700.0, 100.0);
+	attachGUIShaders();
 	
 	float fpsFrames= 0;
 	float lastTime = 0;
@@ -691,7 +696,9 @@ int main(int argc, char *argv[])
 		drawPlanet();
 		drawObj();
 		drawMoon();
-		drawUI();
+		
+		drawButton(button1);
+		drawButton(button2);
 		
 		if(stopRotation == 0){
 			for(int i = 0; i < 11; i++)
@@ -766,11 +773,14 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
 	if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS && mousePosX <= button1.xTopRight && mousePosX >= button1.xTopLeft && mousePosY >= button1.yTopRight && mousePosY <= button1.yBottomRight)
 	{
-		if(stopRotation == 0)
+		if(stopRotation == 0) {
 			stopRotation = 1;
-		else
+			buttonState(0);
+		}
+		else {
 			stopRotation = 0;
-		//printf("xR: %f, xL: %f, yR: %f, rB: %f\n", button1.xTopRight, button1.xTopLeft, button1.yTopRight, button1.yBottomRight);
+			buttonState(1);
+		}
 	}
 }
 
