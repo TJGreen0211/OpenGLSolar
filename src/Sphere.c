@@ -10,7 +10,7 @@ vec2 *tex;
 sphere newSphere;
 
 int Index = 0;
-void triangle(const vec3 a, const vec3 b, const vec3 c)
+void triangle(vec3 a, vec3 b, vec3 c)
 {
 	vec3 one, two;
 	one.x = b.x - a.x;
@@ -27,7 +27,7 @@ void triangle(const vec3 a, const vec3 b, const vec3 c)
 	triNorms[Index] = normal; triPoints[Index] = c; Index++;
 }
 
-vec3 unitCircle(const vec3 p)
+vec3 unitCircle(vec3 p)
 {
 	float length = p.x*p.x + p.y*p.y + p.z*p.z;
 	vec3 t = {0.0, 0.0, 0.0};
@@ -40,9 +40,8 @@ vec3 unitCircle(const vec3 p)
 	return t;
 }
 
-void divideTriangle(const vec3 a, const vec3 b, const vec3 c, int count)
+void divideTriangle(vec3 a, vec3 b, vec3 c, int count)
 {
-	
 	if(count > 0) {
 		vec3 v1 = unitCircle(addvec3(a, b));
 		vec3 v2 = unitCircle(addvec3(a, c));
@@ -63,8 +62,11 @@ sphere tetrahedron(int count)
 	NumTriangles = pow(4, count+1);
 	NumVertices = 3 * NumTriangles;
 	
-	triPoints = malloc(NumVertices*sizeof(triPoints[0]));
-	triNorms = malloc(NumVertices*sizeof(triNorms[0]));
+	int mallocVertSize = NumVertices*sizeof(triPoints[0]);
+	int mallocNormSize = NumVertices*sizeof(triNorms[0]);
+	
+	triPoints = malloc(mallocVertSize);
+	triNorms = malloc(mallocNormSize);
 	
 	vec3 v[4] = {
 		{ 0.0, 0.0, 1.0 },
@@ -78,11 +80,11 @@ sphere tetrahedron(int count)
     divideTriangle( v[0], v[3], v[1], count );
     divideTriangle( v[0], v[2], v[3], count );
     
-    newSphere.points = malloc(NumVertices*sizeof(triPoints[0]));
-    newSphere.normals = malloc(NumVertices*sizeof(triNorms[0]));
+    newSphere.points = malloc(mallocVertSize);
+    newSphere.normals = malloc(mallocNormSize);
     newSphere.vertexNumber = NumVertices;
-    newSphere.size = NumVertices*sizeof(triPoints[0]);
-    newSphere.nsize = NumVertices*sizeof(triNorms[0]);
+    newSphere.size = mallocVertSize;
+    newSphere.nsize = mallocNormSize;
     for(int i = 0; i < NumVertices; i++)
 	{
 		newSphere.points[i] = triPoints[i];

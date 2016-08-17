@@ -24,7 +24,7 @@ typedef struct imgButton {
 } imgButton;
 
 
-imgButton initButton(float topx, float topy, float size, imgButton button, char* texture);
+imgButton initButton(float topx, float topy, float size, imgButton *button, char* texture);
 void drawButton();
 void buttonState(int state);
 void attachGUIShaders();

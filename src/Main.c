@@ -27,7 +27,8 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 GLuint loadShader(char *vertex_path, char *fragement_path);
 
 int mousePosX, mousePosY;
-imgButton button1, button2;
+imgButton button1, mercuryButton, venusButton, earthButton, marsButton, 
+	jupiterButton, saturnButton, uranusButton, neptuneButton;
 	
 const float WIDTH = 1400, HEIGHT = 800;
 float ASPECT = WIDTH/HEIGHT;
@@ -45,10 +46,10 @@ GLuint sunTexture;
 GLuint sunNormal;
 	
 GLuint moonTexture;
-GLuint skyboxShader, sunShader, planetShader;
+GLuint skyboxShader, sunShader, planetShader, atmosphereShader;
 GLuint vertUIShader, fragUIShader, UIShader;
 GLuint vPosition, vNormal, vTangent, vBitangent;
-GLuint planetVAO, planetVBO, skyboxVAO, skyboxVBO, objectVAO, objectVBO;
+GLuint planetVAO, planetVBO, skyboxVAO, skyboxVBO, objectVAO, objectVBO, atmosphereVAO, atmosphereVBO;
 GLuint hdrFBO, colorBuffer, rboDepth;
 GLuint ModelView, projection, model, view;
 mat4 mv, p, m, v;
@@ -313,6 +314,9 @@ void init()
 		"src/shaders/sun.frag");
 	createShader(&planetShader, "src/shaders/planet.vert",
 		"src/shaders/planet.frag");
+		
+	createShader(&atmosphereShader, "src/shaders/atmosphere.vert",
+		"src/shaders/atmosphere.frag");
     
     
     glGenFramebuffers(1, &hdrFBO);
@@ -385,6 +389,22 @@ void init()
     vNormal = glGetAttribLocation(sunShader, "vNormal");
     glEnableVertexAttribArray(vNormal);
     glVertexAttribPointer(vNormal, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(object.size));
+	glBindVertexArray(0);
+	
+	glGenVertexArrays(1, &atmosphereVAO);
+	glBindVertexArray(atmosphereVAO);
+	glGenBuffers(1, &atmosphereVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, atmosphereVBO);
+	glBufferData(GL_ARRAY_BUFFER, planet.size + planet.nsize, NULL, GL_STATIC_DRAW);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, planet.size, planet.points);
+	glBufferSubData(GL_ARRAY_BUFFER, planet.size, planet.nsize, planet.normals);
+	vPosition = glGetAttribLocation(atmosphereShader, "vPosition");
+    glEnableVertexAttribArray(vPosition);
+    glVertexAttribPointer(vPosition, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(0));	
+    
+    vNormal = glGetAttribLocation(atmosphereShader, "vNormal");
+    glEnableVertexAttribArray(vNormal);
+    glVertexAttribPointer(vNormal, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(planet.size));
 	glBindVertexArray(0);
 	
     glEnable(GL_DEPTH_TEST);
@@ -511,13 +531,65 @@ void drawSun()
     glUniform1f(glGetUniformLocation(sunShader, "exposure"), 1.0);
 }
 
+void drawAtmosphere()
+{
+	glUseProgram(atmosphereShader);
+	setupLighting(atmosphereShader);
+	vec3 Position = getCameraPosition();
+	v = getViewMatrix();
+	
+	for(int i = 0; i < 11; i++)
+    {	
+    	float scaleFactor = 1.025;
+    	m = multiplymat4(planetInstanceArray[i].planetLocation, scale(scaleFactor));
+    	
+    	float fOuter = planetInstanceArray[i].size*100*scaleFactor;
+		float fInner = (planetInstanceArray[i].size*100);
+		
+		//float fOuter = (fScale);
+		//float fInner = fScale/scaleFactor;
+		
+		//printf("fInner: %f, fOuter: %f\n", fInner, 1/(fOuter-fInner));
+		//printf("camera: %f, %f, %f\n", Position.x, Position.y, Position.z);
+		//printf("camera: %f, %f, %f\n", 1.0f / pow(0.650f, 4.0f), 1.0f / pow(0.570f, 4.0f), 1.0f / pow(0.475f, 4.0f));
+		
+		glUniform4f(glGetUniformLocation(atmosphereShader, "LightPosition"), light_position.x, light_position.y, light_position.z, light_position.w);
+    	glUniform3f(glGetUniformLocation(atmosphereShader, "camPosition"), Position.x, Position.y, Position.z);
+    	glUniform3f(glGetUniformLocation(atmosphereShader, "v3InvWavelength"), 1.0f / pow(0.650f, 4.0f), 1.0f / pow(0.570f, 4.0f), 1.0f / pow(0.475f, 4.0f));
+    	glUniform1f(glGetUniformLocation(atmosphereShader, "fCameraHeight"), lengthvec3(getCameraPosition()));
+    	glUniform1f(glGetUniformLocation(atmosphereShader, "fCameraHeight2"), (lengthvec3(getCameraPosition())) * (lengthvec3(getCameraPosition())));
+    	glUniform1f(glGetUniformLocation(atmosphereShader, "fInnerRadius"), fInner);
+    	glUniform1f(glGetUniformLocation(atmosphereShader, "fInnerRadius2"), fInner*fInner);
+    	glUniform1f(glGetUniformLocation(atmosphereShader, "fOuterRadius"), fOuter);
+    	glUniform1f(glGetUniformLocation(atmosphereShader, "fOuterRadius2"), fOuter*fOuter);
+    
+    	glUniform1f(glGetUniformLocation(atmosphereShader, "fKrESun"), 0.0025f * 20.0f);
+    	glUniform1f(glGetUniformLocation(atmosphereShader, "fKmESun"), 0.0015f * 20.0f);
+    	glUniform1f(glGetUniformLocation(atmosphereShader, "fKr4PI"), 0.0025f * 4.0f * 3.141592653f);
+    	glUniform1f(glGetUniformLocation(atmosphereShader, "fKm4PI"), 0.0015f * 4.0f * 3.141592653f);
+    
+    	glUniform1f(glGetUniformLocation(atmosphereShader, "fScale"), 1/(fOuter-fInner));
+    	glUniform1f(glGetUniformLocation(atmosphereShader, "fScaleDepth"), 0.25);
+    	glUniform1f(glGetUniformLocation(atmosphereShader, "fScaleOverScaleDepth"), 1.0/(fOuter-fInner)/0.25);
+    	glUniform1f(glGetUniformLocation(atmosphereShader, "g"), -0.990f);
+    	glUniform1f(glGetUniformLocation(atmosphereShader, "g2"), -0.990f*-0.990f);
+    	glUniform1f(glGetUniformLocation(atmosphereShader, "time"), glfwGetTime());
+    	
+    	initMVP(atmosphereShader, m, v);
+    	
+    	glBindVertexArray (atmosphereVAO);
+    	glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber);
+    	glBindVertexArray(0);
+    }
+}
+
 void drawPlanet()
 {   
 	glUseProgram(planetShader);
 	setupLighting(planetShader);
 	vec3 Position = getCameraPosition();
 	v = getViewMatrix();
-	
+		
 	for(int i = 0; i < 11; i++)
 	{	
 		mat4 rotation = multiplymat4(rotateY(rotationSpeedArray[i]), rotateX(planetInstanceArray[i].axialTilt+45));
@@ -527,8 +599,8 @@ void drawPlanet()
 		mat4 rotxy = multiplymat4(b, roty);
 		mat4 c = multiplymat4(rotxy, translation);
 		m = multiplymat4(c, scale(planetInstanceArray[i].size*100));
-		planetInstanceArray[i].planetLocation = c;
-	
+		planetInstanceArray[i].planetLocation = m;
+    	
 		//mv = modelMatrices[i];
 		initMVP(planetShader, m, v);
 		glUniform3f(glGetUniformLocation(planetShader, "cameraPos"), Position.x, Position.y, Position.z);
@@ -538,33 +610,9 @@ void drawPlanet()
     	bindTexture(GL_TEXTURE1, planetInstanceArray[i].normal);
     	glUniform1i(glGetUniformLocation(planetShader, "tex"), 0);
     	glUniform1i(glGetUniformLocation(planetShader, "normalTex"), 1);
-    	glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber );
+    	glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber);
     	glBindVertexArray(0);
     }
-    /*
-    glUniform3f(glGetUniformLocation(planetShader, "v3CameraPos"), Position.x, Position.y, Position.z);
-    glUniform3f(glGetUniformLocation(planetShader, "v3InvWavelength"), 1.0f / pow(0.650f, 4.0f), 1.0f / pow(0.570f, 4.0f), 1.0f / pow(0.475f, 4.0f));
-    glUniform1f(glGetUniformLocation(planetShader, "fCameraHeight"), 10.0f+lengthvec3(getCameraPosition()));
-    glUniform1f(glGetUniformLocation(planetShader, "fCameraHeight2"), (10.0f+lengthvec3(getCameraPosition())) * (10.0f+lengthvec3(getCameraPosition())));
-    glUniform1f(glGetUniformLocation(planetShader, "fInnerRadius"), 10.0f);
-    glUniform1f(glGetUniformLocation(planetShader, "fInnerRadius2"), 100.0f);
-    glUniform1f(glGetUniformLocation(planetShader, "fOuterRadius"), 10.25f);
-    glUniform1f(glGetUniformLocation(planetShader, "fOuterRadius2"), 10.25f*10.25f);
-    
-    glUniform1f(glGetUniformLocation(planetShader, "fKrESun"), 0.0025f * 20.0f);
-    glUniform1f(glGetUniformLocation(planetShader, "fKmESun"), 0.0015f * 20.0f);
-    glUniform1f(glGetUniformLocation(planetShader, "fKr4PI"), 0.0025f * 4.0f * 3.141592653f);
-    glUniform1f(glGetUniformLocation(planetShader, "fKm4PI"), 0.0015f * 4.0f * 3.141592653f);
-    glUniform1f(glGetUniformLocation(planetShader, "fScale"), 1.0f / 0.25f);
-    
-    glUniform1f(glGetUniformLocation(planetShader, "fScaleDepth"), 0.25f);
-    glUniform1f(glGetUniformLocation(planetShader, "fScaleOverScaleDepth"), 4.0f / 0.25f);
-    glUniform1f(glGetUniformLocation(planetShader, "g"), -0.990f);
-    glUniform1f(glGetUniformLocation(planetShader, "g2"), -0.990f*-0.990f);
-    
-    
-    //vec3 lightDirection = light_position*/
-    
 }
 
 void drawMoon()
@@ -636,6 +684,32 @@ int initCubemap()
 	return loadCubemap(cubemapArray);
 }
 
+void initializePlanetButtons()
+{
+	button1 = initButton(1300.0, 700.0, 100.0, &button1, "include/textures/buttonUp.png");
+	mercuryButton = initButton(100.0, 100.0, 50.0, &mercuryButton, "include/textures/buttons/mercury.png");
+	venusButton = initButton(200.0, 100.0, 50.0, &venusButton, "include/textures/buttons/venus.png");
+	earthButton = initButton(300.0, 100.0, 50.0, &earthButton, "include/textures/buttons/earth.png");
+	marsButton = initButton(400.0, 100.0, 50.0, &marsButton, "include/textures/buttons/mars.png");
+	
+	jupiterButton = initButton(500.0, 100.0, 50.0, &jupiterButton, "include/textures/buttons/jupiter.png");
+	saturnButton = initButton(600.0, 100.0, 50.0, &saturnButton, "include/textures/buttons/saturn.png");
+	uranusButton = initButton(700.0, 100.0, 50.0, &uranusButton, "include/textures/buttons/uranus.png");
+	neptuneButton = initButton(800.0, 100.0, 50.0, &neptuneButton, "include/textures/buttons/neptune.png");
+}
+
+void drawPlanetButtons()
+{
+	drawButton(mercuryButton);
+	drawButton(venusButton);
+	drawButton(earthButton);
+	drawButton(marsButton);
+	drawButton(jupiterButton);
+	drawButton(saturnButton);
+	drawButton(uranusButton);
+	drawButton(neptuneButton);
+}
+
 int main(int argc, char *argv[])
 {
 	chdir("/Users/tylergreen/Documents/Programming/Sol");
@@ -659,8 +733,7 @@ int main(int argc, char *argv[])
 	init();
 	createPerspectiveMatrix();
 	
-	button1 = initButton(1300.0, 700.0, 100.0, button1, "include/textures/buttons/button.png");
-	button2 = initButton(700.0, 700.0, 100.0, button2, "include/textures/buttonUp.png");
+	initializePlanetButtons();
 	
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_MULTISAMPLE);
@@ -694,11 +767,17 @@ int main(int argc, char *argv[])
 		drawSkybox(skyboxTexture);
 		drawSun();
 		drawPlanet();
+		//glFrontFace(GL_CW);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_ONE, GL_ONE);
+		drawAtmosphere();
+		glDisable(GL_BLEND);
+		//glFrontFace(GL_CCW);
 		drawObj();
 		drawMoon();
 		
-		drawButton(button1);
-		drawButton(button2);
+		//drawButton(button1);
+		//drawPlanetButtons();
 		
 		if(stopRotation == 0){
 			for(int i = 0; i < 11; i++)
@@ -770,8 +849,9 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 	mousePosY = ypos;
 }
 
-void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
-	if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS && mousePosX <= button1.xTopRight && mousePosX >= button1.xTopLeft && mousePosY >= button1.yTopRight && mousePosY <= button1.yBottomRight)
+void checkButtonPress(imgButton b)
+{
+	if(mousePosX <= b.xTopRight && mousePosX >= b.xTopLeft && mousePosY >= b.yTopRight && mousePosY <= b.yBottomRight)
 	{
 		if(stopRotation == 0) {
 			stopRotation = 1;
@@ -781,6 +861,13 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 			stopRotation = 0;
 			buttonState(1);
 		}
+	}
+}
+
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+	if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+	{
+		checkButtonPress(button1);
 	}
 }
 

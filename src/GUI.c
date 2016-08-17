@@ -20,7 +20,6 @@ void attachGUIShaders()
 
 void drawUI(int textureID)
 {	
-	
 	glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, textureID);
     glUniform1i(glGetUniformLocation(UIShader, "tex"), 0);
@@ -87,25 +86,22 @@ float *changeCoordinates(float posx, float posy, float size, float array[]) {
 	return array;
 }
 
-imgButton initButton(float topx, float topy, float size, imgButton b, char* texture)
+imgButton initButton(float topx, float topy, float size, imgButton *b, char* texture)
 {
-	b.texture = loadTexture(texture);
-	b.xTopRight = topx;
-	b.xTopLeft = topx-size;
-	b.yTopRight = 800-topy;
-	b.yBottomRight = 800-(topy-size);
-	b.size = 30*sizeof(float);
+	b->texture = loadTexture(texture);
+	b->xTopRight = topx;
+	b->xTopLeft = topx-size;
+	b->yTopRight = 800-topy;
+	b->yBottomRight = 800-(topy-size);
+	b->size = 30*sizeof(float);
 	
 	float UIVertices[30] = {0};
 	*UIVertices = *changeCoordinates(topx, topy, size, UIVertices);
-	b.pointArray = malloc(b.size);
+	b->pointArray = malloc(b->size);
 	for(int i = 0; i < 30; i++)
 	{
-		b.pointArray[i] = UIVertices[i];
+		b->pointArray[i] = UIVertices[i];
 	}
 	
-	printf("%d\n", b.size);
-	printf("%lu\n", sizeof(UIVertices));
-	
-	return b;
+	return *b;
 }
