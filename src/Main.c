@@ -712,7 +712,7 @@ void drawPlanetButtons()
 
 int main(int argc, char *argv[])
 {
-	chdir("/Users/tylergreen/Documents/Programming/Sol");
+	chdir("/Users/tjgreen/Documents/OpenGL/Sol");
 	
 	GLFWwindow *window = setupGLFW();
 	GLuint skyboxTexture = initCubemap();

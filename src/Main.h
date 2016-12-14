@@ -15,7 +15,7 @@
 #include "Sphere.h"
 #include "Obj.h"
 #include "GUI.h"
-#include "../include/SOIL/src/SOIL.h"
+#include "SOIL/SOIL.h"
 
 
 
