@@ -39,7 +39,7 @@ int keys;
 int actionPress;
 
 float zNear = 0.5, zFar = 100000.0;
-float thetaY = 0.0;
+float theta = 0.0;
 float zoom = 1;
 
 GLuint sunTexture;
@@ -64,11 +64,16 @@ typedef struct stack {
 
 stack smat;
 
+mat4 atmoPos[11];
+
 planetParameters planetInstanceArray[11];
 mat4 modelMatrices[11];
 float orbitSpeedArray[11] = {0};
 float rotationSpeedArray[11] = {0};
+float planetScaleMult = 100.0;
+float planetRadMult = 1000.0;
 vec4 light_position = {0.0, 0.0, -400.0, 1.0}; 
+vec3 translation;
 
 float getScreenWidth()
 {
@@ -140,17 +145,17 @@ void planetBuilder()
 	int planetNormArray[numTextures];
 	*planetNormArray = *loadPlanetNormals(planetNormArray);	
 	
-	mercury.radius = 0.4; mercury.size = 0.38; mercury.orbit = 0.240846; mercury.axialTilt = 0.034; mercury.day = 58.646; mercury.texture = planetTexArray[0]; mercury.normal = planetNormArray[0];
-	venus.radius = 0.7; venus.size = 0.9499; venus.orbit = 0.615198; venus.axialTilt = 177.36; venus.day = 243.025; venus.texture = planetTexArray[1]; venus.normal = planetNormArray[1];
-	earth.radius = 1.0; earth.size = 1.0; earth.orbit = 1.0; earth.axialTilt = 23.4392811; earth.day = 1; earth.texture = planetTexArray[2]; earth.normal = planetNormArray[2];
-	mars.radius = 1.5; mars.size = 0.533; mars.orbit = 1.88; mars.axialTilt = 25.19; mars.day = 1.025957; mars.texture = planetTexArray[3]; mars.normal = planetNormArray[3];
-	ceres.radius = 2.77; ceres.size = 0.07; ceres.orbit = 4.6; ceres.axialTilt = 4; ceres.day = 0.3781; ceres.texture = planetTexArray[4]; ceres.normal = planetNormArray[4];
-	jupiter.radius = 5.2; jupiter.size = 11.209; jupiter.orbit = 11.8618; jupiter.axialTilt = 3.13; jupiter.day = 0.413; jupiter.texture = planetTexArray[5]; jupiter.normal = planetNormArray[5];
-	saturn.radius = 9.5; saturn.size = 9.45; saturn.orbit = 29.4571; saturn.axialTilt = 26.73; saturn.day = 0.439583; saturn.texture = planetTexArray[6]; saturn.normal = planetNormArray[6];
-	uranus.radius = 19.2; uranus.size = 4.007; uranus.orbit = 84.0205; uranus.axialTilt = 97.77; uranus.day = 0.71833; uranus.texture = planetTexArray[7]; uranus.normal = planetNormArray[7];
-	neptune.radius = 30.1; neptune.size = 3.883; neptune.orbit = 164.8; neptune.axialTilt = 28.32; neptune.day = 0.6713; neptune.texture = planetTexArray[8]; neptune.normal = planetNormArray[8];
-	pluto.radius = 39; pluto.size = 0.18; pluto.orbit = 248; pluto.axialTilt = 119.591; pluto.day = 6.387230; pluto.texture = planetTexArray[9]; pluto.normal = planetNormArray[9];
-	eris.radius = 68; eris.size = 0.182; eris.orbit = 558.04; eris.axialTilt = 61.45; eris.day = 1.079167 ; eris.texture = planetTexArray[10]; eris.normal = planetNormArray[10];
+	mercury.radius = 0.4*planetRadMult; mercury.size = 0.38*planetScaleMult; mercury.orbit = 0.240846; mercury.axialTilt = 0.034; mercury.day = 58.646; mercury.texture = planetTexArray[0]; mercury.normal = planetNormArray[0];
+	venus.radius = 0.7*planetRadMult; venus.size = 0.9499*planetScaleMult; venus.orbit = 0.615198; venus.axialTilt = 177.36; venus.day = 243.025; venus.texture = planetTexArray[1]; venus.normal = planetNormArray[1];
+	earth.radius = 1.0*planetRadMult; earth.size = 1.0*planetScaleMult; earth.orbit = 1.0; earth.axialTilt = 23.4392811; earth.day = 1; earth.texture = planetTexArray[2]; earth.normal = planetNormArray[2];
+	mars.radius = 1.5*planetRadMult; mars.size = 0.533*planetScaleMult; mars.orbit = 1.88; mars.axialTilt = 25.19; mars.day = 1.025957; mars.texture = planetTexArray[3]; mars.normal = planetNormArray[3];
+	ceres.radius = 2.77*planetRadMult; ceres.size = 0.07*planetScaleMult; ceres.orbit = 4.6; ceres.axialTilt = 4; ceres.day = 0.3781; ceres.texture = planetTexArray[4]; ceres.normal = planetNormArray[4];
+	jupiter.radius = 5.2*planetRadMult; jupiter.size = 11.209*planetScaleMult; jupiter.orbit = 11.8618; jupiter.axialTilt = 3.13; jupiter.day = 0.413; jupiter.texture = planetTexArray[5]; jupiter.normal = planetNormArray[5];
+	saturn.radius = 9.5*planetRadMult; saturn.size = 9.45*planetScaleMult; saturn.orbit = 29.4571; saturn.axialTilt = 26.73; saturn.day = 0.439583; saturn.texture = planetTexArray[6]; saturn.normal = planetNormArray[6];
+	uranus.radius = 19.2*planetRadMult; uranus.size = 4.007*planetScaleMult; uranus.orbit = 84.0205; uranus.axialTilt = 97.77; uranus.day = 0.71833; uranus.texture = planetTexArray[7]; uranus.normal = planetNormArray[7];
+	neptune.radius = 30.1*planetRadMult; neptune.size = 3.883*planetScaleMult; neptune.orbit = 164.8; neptune.axialTilt = 28.32; neptune.day = 0.6713; neptune.texture = planetTexArray[8]; neptune.normal = planetNormArray[8];
+	pluto.radius = 39*planetRadMult; pluto.size = 0.18*planetScaleMult; pluto.orbit = 248; pluto.axialTilt = 119.591; pluto.day = 6.387230; pluto.texture = planetTexArray[9]; pluto.normal = planetNormArray[9];
+	eris.radius = 68*planetRadMult; eris.size = 0.182*planetScaleMult; eris.orbit = 558.04; eris.axialTilt = 61.45; eris.day = 1.079167 ; eris.texture = planetTexArray[10]; eris.normal = planetNormArray[10];
 	
 	planetInstanceArray[0] = mercury;
 	planetInstanceArray[1] = venus;
@@ -448,9 +453,9 @@ void setupLighting(int prog)
 
 void initMVP(int shader, mat4 m, mat4 v)
 {
-	glUniformMatrix4fv(glGetUniformLocation( shader, "projection" ), 1, GL_TRUE, &p.m[0][0]);
-	glUniformMatrix4fv( glGetUniformLocation( shader, "model" ), 1, GL_TRUE, &m.m[0][0] );
-	glUniformMatrix4fv( glGetUniformLocation( shader, "view" ), 1, GL_TRUE, &v.m[0][0] );
+	glUniformMatrix4fv(glGetUniformLocation( shader, "projection" ), 1, GL_FALSE, &p.m[0][0]);
+	glUniformMatrix4fv( glGetUniformLocation( shader, "model" ), 1, GL_FALSE, &m.m[0][0] );
+	glUniformMatrix4fv( glGetUniformLocation( shader, "view" ), 1, GL_FALSE, &v.m[0][0] );
 }
 
 void drawSkybox(skyboxTexture)
@@ -508,7 +513,7 @@ void drawSun()
 	v = getViewMatrix();
 	
 	mat4 a = translate(0.0, 0.0, -400.0); //333.0 Times
-	mat4 rotation = rotateY(thetaY);
+	mat4 rotation = rotateY(theta);
 	mat4 b = multiplymat4(a, rotation);
 	m = multiplymat4(b, scale(100.0));
 	
@@ -534,48 +539,36 @@ void drawSun()
 void drawAtmosphere()
 {
 	glUseProgram(atmosphereShader);
-	setupLighting(atmosphereShader);
-	vec3 Position = getCameraPosition();
+	//setupLighting(atmosphereShader);
+	//vec3 Position = getCameraPosition();
 	v = getViewMatrix();
+	
+	mat3 cc = {{
+		{0.0, 0.0, 0.0},
+		{0.0, 0.0, 0.0},
+		{0.0, 0.0, 0.0}
+	}};
+	
+	vec3 position = {-v.m[0][3], -v.m[1][3], -v.m[2][3]};
+	vec3 cam = multiplymat3vec3(transposemat3(cc), position);
 	
 	for(int i = 0; i < 11; i++)
     {	
-    	float scaleFactor = 1.025;
-    	m = multiplymat4(planetInstanceArray[i].planetLocation, scale(scaleFactor));
+    	float scaleFactor = 1.25;
+    	float fOuter = planetInstanceArray[i].size*scaleFactor;
+		float fInner = (planetInstanceArray[i].size);
+		translation.x = planetInstanceArray[i].radius * cos(orbitSpeedArray[i]);
+		translation.y = 0.0;
+		translation.z = planetInstanceArray[i].radius * sin(orbitSpeedArray[i]);
+    	m = multiplymat4(translatevec3(translation), scale(planetInstanceArray[i].size*scaleFactor));
     	
-    	float fOuter = planetInstanceArray[i].size*100*scaleFactor;
-		float fInner = (planetInstanceArray[i].size*100);
-		
-		//float fOuter = (fScale);
-		//float fInner = fScale/scaleFactor;
-		
-		//printf("fInner: %f, fOuter: %f\n", fInner, 1/(fOuter-fInner));
-		//printf("camera: %f, %f, %f\n", Position.x, Position.y, Position.z);
-		//printf("camera: %f, %f, %f\n", 1.0f / pow(0.650f, 4.0f), 1.0f / pow(0.570f, 4.0f), 1.0f / pow(0.475f, 4.0f));
-		
-		glUniform4f(glGetUniformLocation(atmosphereShader, "LightPosition"), light_position.x, light_position.y, light_position.z, light_position.w);
-    	glUniform3f(glGetUniformLocation(atmosphereShader, "camPosition"), Position.x, Position.y, Position.z);
-    	glUniform3f(glGetUniformLocation(atmosphereShader, "v3InvWavelength"), 1.0f / pow(0.650f, 4.0f), 1.0f / pow(0.570f, 4.0f), 1.0f / pow(0.475f, 4.0f));
-    	glUniform1f(glGetUniformLocation(atmosphereShader, "fCameraHeight"), lengthvec3(getCameraPosition()));
-    	glUniform1f(glGetUniformLocation(atmosphereShader, "fCameraHeight2"), (lengthvec3(getCameraPosition())) * (lengthvec3(getCameraPosition())));
-    	glUniform1f(glGetUniformLocation(atmosphereShader, "fInnerRadius"), fInner);
-    	glUniform1f(glGetUniformLocation(atmosphereShader, "fInnerRadius2"), fInner*fInner);
-    	glUniform1f(glGetUniformLocation(atmosphereShader, "fOuterRadius"), fOuter);
-    	glUniform1f(glGetUniformLocation(atmosphereShader, "fOuterRadius2"), fOuter*fOuter);
-    
-    	glUniform1f(glGetUniformLocation(atmosphereShader, "fKrESun"), 0.0025f * 20.0f);
-    	glUniform1f(glGetUniformLocation(atmosphereShader, "fKmESun"), 0.0015f * 20.0f);
-    	glUniform1f(glGetUniformLocation(atmosphereShader, "fKr4PI"), 0.0025f * 4.0f * 3.141592653f);
-    	glUniform1f(glGetUniformLocation(atmosphereShader, "fKm4PI"), 0.0015f * 4.0f * 3.141592653f);
-    
-    	glUniform1f(glGetUniformLocation(atmosphereShader, "fScale"), 1/(fOuter-fInner));
-    	glUniform1f(glGetUniformLocation(atmosphereShader, "fScaleDepth"), 0.25);
-    	glUniform1f(glGetUniformLocation(atmosphereShader, "fScaleOverScaleDepth"), 1.0/(fOuter-fInner)/0.25);
-    	glUniform1f(glGetUniformLocation(atmosphereShader, "g"), -0.990f);
-    	glUniform1f(glGetUniformLocation(atmosphereShader, "g2"), -0.990f*-0.990f);
-    	glUniform1f(glGetUniformLocation(atmosphereShader, "time"), glfwGetTime());
-    	
-    	initMVP(atmosphereShader, m, v);
+		glUniform1f(glGetUniformLocation(atmosphereShader, "fInnerRadius"), fInner);
+		glUniform1f(glGetUniformLocation(atmosphereShader, "fOuterRadius"), fOuter);
+		glUniform3f(glGetUniformLocation(atmosphereShader, "camPosition"), cam.x, cam.y, cam.z);
+		glUniform3f(glGetUniformLocation(atmosphereShader, "translation"), translation.x, translation.y, translation.z);
+		glUniform1f(glGetUniformLocation(atmosphereShader, "time"), glfwGetTime());
+
+		initMVP(atmosphereShader, m, v);
     	
     	glBindVertexArray (atmosphereVAO);
     	glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber);
@@ -592,16 +585,17 @@ void drawPlanet()
 		
 	for(int i = 0; i < 11; i++)
 	{	
-		mat4 rotation = multiplymat4(rotateY(rotationSpeedArray[i]), rotateX(planetInstanceArray[i].axialTilt+45));
-		mat4 translation = multiplymat4(translate(planetInstanceArray[i].radius*1000, 0.0, 0.0), rotation);
-		mat4 b = translate(0.0, 0.0, -400.0);
-		mat4 roty = rotateY(orbitSpeedArray[i]);
-		mat4 rotxy = multiplymat4(b, roty);
-		mat4 c = multiplymat4(rotxy, translation);
-		m = multiplymat4(c, scale(planetInstanceArray[i].size*100));
-		planetInstanceArray[i].planetLocation = m;
+		translation.x = planetInstanceArray[i].radius * cos(orbitSpeedArray[i]);
+		translation.y = 0.0;
+		translation.z = planetInstanceArray[i].radius * sin(orbitSpeedArray[i]);
+		m = multiplymat4(multiplymat4(translatevec3(translation), scale(planetInstanceArray[i].size)),rotateX(planetInstanceArray[i].axialTilt+45.0));
+		
+		//mat4 b = translate(0.0, 0.0, -400.0);
+		//atmoPos[i] = translate(planetInstanceArray[i].radius*1000.0, 0.0, -400.0);
+		//mat4 c = multiplymat4(rotateY(orbitSpeedArray[i]), translation);
+		//m = multiplymat4(c, scale(planetInstanceArray[i].size));
+		//planetInstanceArray[i].planetLocation = m;
     	
-		//mv = modelMatrices[i];
 		initMVP(planetShader, m, v);
 		glUniform3f(glGetUniformLocation(planetShader, "cameraPos"), Position.x, Position.y, Position.z);
     
@@ -622,8 +616,8 @@ void drawMoon()
 	vec3 Position = getCameraPosition();
 	v = getViewMatrix();
 	
-	mat4 rt = multiplymat4(rotateY(orbitSpeedArray[3]), translate(planetInstanceArray[3].radius*1000, 0.0, 0.0));
-	m = multiplymat4(multiplymat4(rt, translate(10.0, 0.0, 0.0)), scale(100));
+	mat4 rt = multiplymat4(rotateY(orbitSpeedArray[3]), translate(planetInstanceArray[3].radius*1000.0, 0.0, 0.0));
+	m = multiplymat4(multiplymat4(rt, translate(10.0, 0.0, 0.0)), scale(100.0));
 	
 	//mv = modelMatrices[i];
 	initMVP(planetShader, m, v);
@@ -782,13 +776,13 @@ int main(int argc, char *argv[])
 		if(stopRotation == 0){
 			for(int i = 0; i < 11; i++)
 			{
-				orbitSpeedArray[i] += 0.1/planetInstanceArray[i].orbit;
+				orbitSpeedArray[i] += 0.005/planetInstanceArray[i].orbit;
 			}
 			for(int i = 0; i < 11; i++)
 			{
-				rotationSpeedArray[i] += 0.1/planetInstanceArray[i].day;
+				rotationSpeedArray[i] += 0.005/planetInstanceArray[i].day;
 			}
-			thetaY += 0.1;
+			theta += 0.009;
 		}
 		
 		glfwSwapBuffers(window);

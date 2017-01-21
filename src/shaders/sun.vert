@@ -20,9 +20,9 @@ uniform vec3 camPosition;
 
 void main()
 {
-	mat4 ModelView = view*model;
+	mat4 ModelView = model*view;
 	vec4 vLightPosition = ModelView*LightPosition*vec4(camPosition,1.0);
-	gl_Position = projection*ModelView*vPosition;
+	gl_Position = vPosition*ModelView*projection;
 	
 	mat3 normalMatrix = transpose(inverse(mat3(ModelView)));
 	vec3 T = normalize(normalMatrix * vTangent);
@@ -34,7 +34,7 @@ void main()
 	
 	
     fN = vNormal;
-    fL = vec3(ModelView*vPosition).xyz;
+    fL = vec3(vPosition*ModelView).xyz;
     
     vec3 v;
 	v.x = dot(lightDir, T);

@@ -19,8 +19,8 @@ uniform vec3 camPosition;
 
 void main()
 {	
-	mat4 ModelView = view*model;
-	gl_Position = projection*ModelView*vPosition;
+	mat4 ModelView = model*view;
+	gl_Position = vPosition*ModelView*projection;
 
 	mat3 normalMatrix = transpose(inverse(mat3(model)));
 	vec4 LP = (LightPosition-model*vPosition);
