@@ -7,8 +7,8 @@ in vec3 fH;
 in vec4 TexCoords;
 out vec4 FragColor;
 
-uniform vec4 AmbientProduct, DiffuseProduct, SpecularProduct;
-uniform float Shininess;
+uniform vec4 ambientProduct, diffuseProduct, specularProduct;
+uniform float shininess;
 
 uniform sampler2D tex;
 uniform sampler2D normalTex;
@@ -22,11 +22,11 @@ void main()
     N = normalize(fN);
     
     float Kd = max(dot(fL, N), 0.0);
-    float Ks = pow(max(dot(N, fH), 0.0), Shininess);
+    float Ks = pow(max(dot(N, fH), 0.0), shininess);
     
-    vec3 ambient = AmbientProduct.xyz * color;
-    vec3 diffuse = Kd * DiffuseProduct.xyz * color;
-    vec3 specular = Ks * SpecularProduct.xyz;
+    vec3 ambient = ambientProduct.xyz * color;
+    vec3 diffuse = Kd * diffuseProduct.xyz * color;
+    vec3 specular = Ks * specularProduct.xyz;
 
     // discard the specular highlight if the light's behind the vertex
     if( dot(fL, N) < 0.0 ) {

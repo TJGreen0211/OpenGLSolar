@@ -72,7 +72,6 @@ float orbitSpeedArray[11] = {0};
 float rotationSpeedArray[11] = {0};
 float planetScaleMult = 100.0;
 float planetRadMult = 1000.0;
-vec4 light_position = {0.0, 0.0, -400.0, 1.0}; 
 vec3 translation;
 
 float getScreenWidth()
@@ -310,6 +309,9 @@ void init()
 	vec3 bitangent[planet.vertexNumber];
 	*tangent = *generateTangents(planet.vertexNumber, planet.points, tangent, bitangent);
 	
+	//for(int i = 0; i < planet.vertexNumber; i++)
+	//	printf("%f, %f, %f\n", tangent[i].x, tangent[i].y, tangent[i].z);
+	
 	vec3 vna[planet.vertexNumber];
 	*vna = *generateSmoothNormals(planet.vertexNumber, vna, planet.points, planet.normals);
 	
@@ -348,10 +350,8 @@ void init()
 	glBindBuffer(GL_ARRAY_BUFFER, planetVBO);
 	glBufferData(GL_ARRAY_BUFFER, planet.size + planet.nsize, NULL, GL_STATIC_DRAW);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, planet.size, planet.points);
-	glBufferSubData(GL_ARRAY_BUFFER, planet.size, planet.nsize, vna);
-	
+	glBufferSubData(GL_ARRAY_BUFFER, planet.size, planet.nsize, vna);	
 	glBufferSubData(GL_ARRAY_BUFFER, planet.size+planet.nsize, sizeof(tangent), tangent);
-	glBufferSubData(GL_ARRAY_BUFFER, planet.size+planet.nsize+sizeof(tangent), sizeof(tangent), tangent);
 	
 	vPosition = glGetAttribLocation(planetShader, "vPosition");
     glEnableVertexAttribArray(vPosition);
@@ -363,10 +363,6 @@ void init()
     vTangent = glGetAttribLocation(planetShader, "vTangent");
     glEnableVertexAttribArray(vTangent);
     glVertexAttribPointer(vTangent, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(planet.size+planet.nsize));
-    
-    vBitangent = glGetAttribLocation(planetShader, "vBitangent");
-    glEnableVertexAttribArray(vBitangent);
-    glVertexAttribPointer(vBitangent, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(planet.size+planet.nsize+sizeof(tangent)));
     
 	glBindVertexArray(0);
 	
@@ -420,15 +416,6 @@ void createPerspectiveMatrix()
 	p = perspective(zoom*45.0, ASPECT, zNear, zFar);
 }
 
-mat4 rotationSpace()
-{
-	vec2 rotation = getCameraRotation();
-    mat4 rx = rotateX(rotation.y);
-	mat4 ry = rotateY(rotation.x);
-	mat4 rxry = multiplymat4(rx, ry);
-	return rxry;
-}
-
 void setupLighting(int prog)
 {	
     vec4 light_ambient = {0.2, 0.2, 0.2, 1.0};
@@ -438,17 +425,19 @@ void setupLighting(int prog)
     vec4 material_ambient = {0.2, 0.2, 1.0, 1.0};
     vec4 material_diffuse = {0.8, 0.8, 0.8, 1.0};
     vec4 material_specular = {0.5, 0.5, 0.5, 1.0};
+    
+    vec4 light_position = {0.0, 0.0, -100.0, 1.0}; 
     float material_shininess = 25.0f;
     
     vec4 ambient_product = multiplyvec4(light_ambient, material_ambient);
     vec4 diffuse_product = multiplyvec4(light_diffuse, material_diffuse);
     vec4 specular_product = multiplyvec4(light_specular, material_specular);
     
-    glUniform4fv( glGetUniformLocation(prog, "AmbientProduct"), 1, (float*)(&ambient_product) );
-    glUniform4fv( glGetUniformLocation(prog, "DiffuseProduct"), 1, (float*)(&diffuse_product) );
-    glUniform4fv( glGetUniformLocation(prog, "SpecularProduct"), 1, (float*)(&specular_product) );
-	glUniform4fv( glGetUniformLocation(prog, "LightPosition"), 1, (float*)(&light_position) );
-	glUniform1f( glGetUniformLocation(prog, "Shininess"), material_shininess );
+    glUniform4fv( glGetUniformLocation(prog, "ambientProduct"), 1, (float*)(&ambient_product) );
+    glUniform4fv( glGetUniformLocation(prog, "diffuseProduct"), 1, (float*)(&diffuse_product) );
+    glUniform4fv( glGetUniformLocation(prog, "specularProduct"), 1, (float*)(&specular_product) );
+	glUniform4fv( glGetUniformLocation(prog, "lightPos"), 1, (float*)(&light_position) );
+	glUniform1f( glGetUniformLocation(prog, "shininess"), material_shininess );
 }
 
 void initMVP(int shader, mat4 m, mat4 v)
@@ -466,7 +455,7 @@ void drawSkybox(skyboxTexture)
 	glDepthMask(GL_FALSE);
 	glDepthFunc(GL_LEQUAL);
     
-    mv = rotationSpace();
+    mv = getViewRotation();
     
 	glUniformMatrix4fv(glGetUniformLocation( skyboxShader, "projection" ), 1, GL_TRUE, &p.m[0][0]);  
     glUniformMatrix4fv(glGetUniformLocation( skyboxShader, "ModelView" ), 1, GL_TRUE, &mv.m[0][0] );
@@ -487,7 +476,7 @@ void drawObj()
 	v = getViewMatrix();
 	glUseProgram(planetShader);
 	//mat4 rx = multiplymat4(translate(0.0, 0.0, -15.0), rotationSpace());
-	m = multiplymat4(translatevec4(light_position), scale(100));//rx;//multiplymat4(rx, rotateY(90));
+	m = scale(100);//rx;//multiplymat4(rx, rotateY(90));
 	
 	initMVP(planetShader, m, v);
 	
@@ -508,17 +497,15 @@ void drawSun()
 	setupLighting(sunShader);
 	
 	//glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
-	vec3 Position = getCameraPosition();
 	
 	v = getViewMatrix();
 	
-	mat4 a = translate(0.0, 0.0, -400.0); //333.0 Times
+	mat4 a = translate(0.0, 0.0, 0.0); //333.0 Times
 	mat4 rotation = rotateY(theta);
 	mat4 b = multiplymat4(a, rotation);
 	m = multiplymat4(b, scale(100.0));
 	
 	initMVP(sunShader, m, v);
-	glUniform3f(glGetUniformLocation(sunShader, "cameraPos"), Position.x, Position.y, Position.z);
 	glUniform1f(glGetUniformLocation(sunShader, "systemTime"), glfwGetTime());
     
     glBindVertexArray (planetVAO);
@@ -540,7 +527,6 @@ void drawAtmosphere()
 {
 	glUseProgram(atmosphereShader);
 	//setupLighting(atmosphereShader);
-	//vec3 Position = getCameraPosition();
 	v = getViewMatrix();
 	
 	mat3 cc = {{
@@ -580,7 +566,6 @@ void drawPlanet()
 {   
 	glUseProgram(planetShader);
 	setupLighting(planetShader);
-	vec3 Position = getCameraPosition();
 	v = getViewMatrix();
 		
 	for(int i = 0; i < 11; i++)
@@ -588,16 +573,26 @@ void drawPlanet()
 		translation.x = planetInstanceArray[i].radius * cos(orbitSpeedArray[i]);
 		translation.y = 0.0;
 		translation.z = planetInstanceArray[i].radius * sin(orbitSpeedArray[i]);
-		m = multiplymat4(multiplymat4(translatevec3(translation), scale(planetInstanceArray[i].size)),rotateX(planetInstanceArray[i].axialTilt+45.0));
+		//mat4 l = multiplymat4(translatevec3(translation), scale(planetInstanceArray[i].size));
+		//glUniformMatrix4fv( glGetUniformLocation( planetShader, "lightMat4" ), 1, GL_FALSE, &l.m[0][0] );
+		mat4 matT = multiplymat4(translatevec3(translation), scale(planetInstanceArray[i].size));
+		mat4 matR = multiplymat4(rotateY(rotationSpeedArray[i]), rotateX(planetInstanceArray[i].axialTilt+45.0));
+		m = multiplymat4(matT,matR);
 		
 		//mat4 b = translate(0.0, 0.0, -400.0);
 		//atmoPos[i] = translate(planetInstanceArray[i].radius*1000.0, 0.0, -400.0);
 		//mat4 c = multiplymat4(rotateY(orbitSpeedArray[i]), translation);
 		//m = multiplymat4(c, scale(planetInstanceArray[i].size));
 		//planetInstanceArray[i].planetLocation = m;
+		
+		/*for(int i = 0; i < 4; i++) {
+			for(int j = 0; j < 4; j++) {
+				printf("[%d][%d]:%f ", i, j, m.m[i][j]); 
+			}
+			printf("\n");
+		}*/
     	
 		initMVP(planetShader, m, v);
-		glUniform3f(glGetUniformLocation(planetShader, "cameraPos"), Position.x, Position.y, Position.z);
     
     	glBindVertexArray (planetVAO);
     	bindTexture(GL_TEXTURE0, planetInstanceArray[i].texture);
@@ -613,7 +608,6 @@ void drawMoon()
 {
 	glUseProgram(planetShader);
 	setupLighting(planetShader);
-	vec3 Position = getCameraPosition();
 	v = getViewMatrix();
 	
 	mat4 rt = multiplymat4(rotateY(orbitSpeedArray[3]), translate(planetInstanceArray[3].radius*1000.0, 0.0, 0.0));
@@ -621,7 +615,6 @@ void drawMoon()
 	
 	//mv = modelMatrices[i];
 	initMVP(planetShader, m, v);
-	glUniform3f(glGetUniformLocation(planetShader, "cameraPos"), Position.x, Position.y, Position.z);
     
     glBindVertexArray (planetVAO);
     glActiveTexture(GL_TEXTURE0);
@@ -764,7 +757,7 @@ int main(int argc, char *argv[])
 		//glFrontFace(GL_CW);
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_ONE, GL_ONE);
-		drawAtmosphere();
+		//drawAtmosphere();
 		glDisable(GL_BLEND);
 		//glFrontFace(GL_CCW);
 		drawObj();
@@ -780,7 +773,7 @@ int main(int argc, char *argv[])
 			}
 			for(int i = 0; i < 11; i++)
 			{
-				rotationSpeedArray[i] += 0.005/planetInstanceArray[i].day;
+				rotationSpeedArray[i] += 0.5/planetInstanceArray[i].day;
 			}
 			theta += 0.009;
 		}

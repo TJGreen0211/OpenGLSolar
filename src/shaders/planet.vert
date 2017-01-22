@@ -14,21 +14,21 @@ out vec4 TexCoords;
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
-uniform vec4 LightPosition;
+uniform vec4 lightPos;
 uniform vec3 camPosition;
+uniform mat4 lightMat4;
 
 void main()
 {	
-	mat4 ModelView = model*view;
-	gl_Position = vPosition*ModelView*projection;
+	gl_Position = vPosition*model*view*projection;
 
 	mat3 normalMatrix = transpose(inverse(mat3(model)));
-	vec4 LP = (LightPosition-model*vPosition);
+	vec4 LP = (lightPos-vPosition*model);
 	vec3 T = normalize(normalMatrix * vTangent);
 	vec3 N = normalize(normalMatrix * vNormal);
 	vec3 B = cross(T, N);//normalize(normalMatrix * vBitangent);
 	
-	vec3 vertexPosition = (ModelView*vPosition).xyz;
+	vec3 vertexPosition = (vPosition*model*view).xyz;
 	vec3 lightDir = (LP-vPosition).xyz;
 	
     fN = normalMatrix*vNormal;
@@ -38,7 +38,7 @@ void main()
 	v.x = dot(lightDir, T);
 	v.y = dot(lightDir, B);
 	v.z = dot(lightDir, N);
-	if( LightPosition.w != 0.0 ) {
+	if( lightPos.w != 0.0 ) {
 		fL = normalize(lightDir);//LightPosition.xyz - vPosition.xyz;
     }
 	
