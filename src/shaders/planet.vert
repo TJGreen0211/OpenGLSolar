@@ -14,45 +14,41 @@ out vec4 TexCoords;
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
+uniform mat4 translation;
 uniform vec4 lightPos;
 uniform vec3 camPosition;
-uniform mat4 lightMat4;
 
 void main()
 {	
 	gl_Position = vPosition*model*view*projection;
-
 	mat3 normalMatrix = transpose(inverse(mat3(model)));
-	vec4 LP = (lightPos-vPosition*model);
 	vec3 T = normalize(normalMatrix * vTangent);
 	vec3 N = normalize(normalMatrix * vNormal);
-	vec3 B = cross(T, N);//normalize(normalMatrix * vBitangent);
+	vec3 B = cross(N, T);
 	
-	vec3 vertexPosition = (vPosition*model*view).xyz;
-	vec3 lightDir = (LP-vPosition).xyz;
+	vec3 lightDir = -normalize(vPosition*model - lightPos).xyz;
+	vec3 vertexPosition = (vPosition*model).xyz;
 	
-    fN = normalMatrix*vNormal;
-    fL = vPosition.xyz;
-    
-    vec3 v;
+	fL = vPosition.xyz;
+	vec3 v;
 	v.x = dot(lightDir, T);
-	v.y = dot(lightDir, B);
-	v.z = dot(lightDir, N);
+	v.x = dot(lightDir, B);
+	v.x = dot(lightDir, N);
 	if( lightPos.w != 0.0 ) {
 		fL = normalize(lightDir);//LightPosition.xyz - vPosition.xyz;
     }
 	
+	
+    fN = vNormal*normalMatrix;
+    
 	v.x = dot(vertexPosition, T);
-	v.y = dot(vertexPosition, B);
-	v.z = dot(vertexPosition, N);
+	v.x = dot(vertexPosition, B);
+	v.x = dot(vertexPosition, N);
 	fE = normalize(vertexPosition);
 	
 	vertexPosition = normalize(vertexPosition);
 	
-	vec3 halfVector = normalize(LP.xyz + fL);
-	v.x = dot (halfVector, T);
-	v.y = dot (halfVector, B);
-	v.z = dot (halfVector, N);
+	vec3 halfVector = normalize(fL - fE);
 	fH = halfVector;
 	
     TexCoords = vPosition;

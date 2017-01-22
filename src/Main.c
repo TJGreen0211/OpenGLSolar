@@ -426,8 +426,8 @@ void setupLighting(int prog)
     vec4 material_diffuse = {0.8, 0.8, 0.8, 1.0};
     vec4 material_specular = {0.5, 0.5, 0.5, 1.0};
     
-    vec4 light_position = {0.0, 0.0, -100.0, 1.0}; 
-    float material_shininess = 25.0f;
+    vec4 light_position = {0.0, 0.0, 1.0, 1.0}; 
+    float material_shininess = 100.0f;
     
     vec4 ambient_product = multiplyvec4(light_ambient, material_ambient);
     vec4 diffuse_product = multiplyvec4(light_diffuse, material_diffuse);
@@ -540,7 +540,7 @@ void drawAtmosphere()
 	
 	for(int i = 0; i < 11; i++)
     {	
-    	float scaleFactor = 1.25;
+    	float scaleFactor = 1.025;
     	float fOuter = planetInstanceArray[i].size*scaleFactor;
 		float fInner = (planetInstanceArray[i].size);
 		translation.x = planetInstanceArray[i].radius * cos(orbitSpeedArray[i]);
@@ -573,25 +573,26 @@ void drawPlanet()
 		translation.x = planetInstanceArray[i].radius * cos(orbitSpeedArray[i]);
 		translation.y = 0.0;
 		translation.z = planetInstanceArray[i].radius * sin(orbitSpeedArray[i]);
-		//mat4 l = multiplymat4(translatevec3(translation), scale(planetInstanceArray[i].size));
-		//glUniformMatrix4fv( glGetUniformLocation( planetShader, "lightMat4" ), 1, GL_FALSE, &l.m[0][0] );
 		mat4 matT = multiplymat4(translatevec3(translation), scale(planetInstanceArray[i].size));
 		mat4 matR = multiplymat4(rotateY(rotationSpeedArray[i]), rotateX(planetInstanceArray[i].axialTilt+45.0));
 		m = multiplymat4(matT,matR);
-		
-		//mat4 b = translate(0.0, 0.0, -400.0);
-		//atmoPos[i] = translate(planetInstanceArray[i].radius*1000.0, 0.0, -400.0);
-		//mat4 c = multiplymat4(rotateY(orbitSpeedArray[i]), translation);
-		//m = multiplymat4(c, scale(planetInstanceArray[i].size));
 		//planetInstanceArray[i].planetLocation = m;
 		
-		/*for(int i = 0; i < 4; i++) {
+		/*
+		for(int i = 0; i < 4; i++) {
 			for(int j = 0; j < 4; j++) {
-				printf("[%d][%d]:%f ", i, j, m.m[i][j]); 
+				printf("%f", matT.m[i][j]);
 			}
 			printf("\n");
-		}*/
-    	
+		}
+		for(int i = 0; i < 4; i++) {
+			for(int j = 0; j < 4; j++) {
+				printf("%f", m.m[i][j]);
+			}
+			printf("\n");
+		}
+		printf("\n");
+    	*/
 		initMVP(planetShader, m, v);
     
     	glBindVertexArray (planetVAO);
@@ -599,6 +600,7 @@ void drawPlanet()
     	bindTexture(GL_TEXTURE1, planetInstanceArray[i].normal);
     	glUniform1i(glGetUniformLocation(planetShader, "tex"), 0);
     	glUniform1i(glGetUniformLocation(planetShader, "normalTex"), 1);
+    	glUniformMatrix4fv( glGetUniformLocation(planetShader, "translation" ), 1, GL_FALSE, &matT.m[0][0] );
     	glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber);
     	glBindVertexArray(0);
     }
@@ -757,7 +759,7 @@ int main(int argc, char *argv[])
 		//glFrontFace(GL_CW);
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_ONE, GL_ONE);
-		//drawAtmosphere();
+		drawAtmosphere();
 		glDisable(GL_BLEND);
 		//glFrontFace(GL_CCW);
 		drawObj();
