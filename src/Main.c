@@ -84,14 +84,6 @@ float getScreenHeight()
 	return WIDTH;
 }
 
-char* getCurrentDirectory()
-{
-	int maxPathLen = 4096;
-	char *cwd_buffer = malloc(sizeof(char) * maxPathLen);
-	char *cwd_result = getcwd(cwd_buffer, maxPathLen);
-	return cwd_result;
-}
-
 int *loadPlanetTextures(int planetTexArray[])
 {
 	char *textureStrings[] = {"include/textures/Planets/mercury.jpg", 
@@ -196,7 +188,7 @@ vec3 *generateTangents(int vertexNumber, vec3 *points, vec3 *tangent, vec3 *bita
 		temp[i].x = atan2(points[i].y, points[i].x) / 3.1415926 + 1.0 * 0.5;
         temp[i].y = asin(points[i].z) / 3.1415926 + 0.5;
 	}
-	for(int i = 0; i < vertexNumber-3; i+=3)
+	for(int i = 0; i < vertexNumber; i+=3)
 	{
 		edge1.x = points[i+1].x - points[i].x;
 		edge1.y = points[i+1].y - points[i].y;
@@ -309,8 +301,10 @@ void init()
 	vec3 bitangent[planet.vertexNumber];
 	*tangent = *generateTangents(planet.vertexNumber, planet.points, tangent, bitangent);
 	
-	//for(int i = 0; i < planet.vertexNumber; i++)
-	//	printf("%f, %f, %f\n", tangent[i].x, tangent[i].y, tangent[i].z);
+	/*for(int i = 0; i < planet.vertexNumber; i++) {
+		printf("tang: %f, %f, %f\n", tangent[i].x, tangent[i].y, tangent[i].z);
+		printf("vert: %f, %f, %f\n", planet.points[i].x, planet.points[i].y, planet.points[i].z);
+	}*/
 	
 	vec3 vna[planet.vertexNumber];
 	*vna = *generateSmoothNormals(planet.vertexNumber, vna, planet.points, planet.normals);
@@ -348,14 +342,15 @@ void init()
 	glBindVertexArray(planetVAO);
 	glGenBuffers(1, &planetVBO);
 	glBindBuffer(GL_ARRAY_BUFFER, planetVBO);
-	glBufferData(GL_ARRAY_BUFFER, planet.size + planet.nsize, NULL, GL_STATIC_DRAW);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, planet.size, planet.points);
-	glBufferSubData(GL_ARRAY_BUFFER, planet.size, planet.nsize, vna);	
-	glBufferSubData(GL_ARRAY_BUFFER, planet.size+planet.nsize, sizeof(tangent), tangent);
+	glBufferData(GL_ARRAY_BUFFER, planet.size + planet.nsize + sizeof(tangent), NULL, GL_STATIC_DRAW);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, 						planet.size, 		planet.points);
+	glBufferSubData(GL_ARRAY_BUFFER, planet.size, 				planet.nsize, 		vna);	
+	glBufferSubData(GL_ARRAY_BUFFER, planet.size+planet.nsize, 	sizeof(tangent),	tangent);
 	
 	vPosition = glGetAttribLocation(planetShader, "vPosition");
     glEnableVertexAttribArray(vPosition);
     glVertexAttribPointer(vPosition, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(0));	
+    
     vNormal = glGetAttribLocation(planetShader, "vNormal");
     glEnableVertexAttribArray(vNormal);
     glVertexAttribPointer(vNormal, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(planet.size));
@@ -427,7 +422,7 @@ void setupLighting(int prog)
     vec4 material_specular = {0.5, 0.5, 0.5, 1.0};
     
     vec4 light_position = {0.0, 0.0, 1.0, 1.0}; 
-    float material_shininess = 100.0f;
+    float material_shininess = 50.0f;
     
     vec4 ambient_product = multiplyvec4(light_ambient, material_ambient);
     vec4 diffuse_product = multiplyvec4(light_diffuse, material_diffuse);
@@ -437,7 +432,7 @@ void setupLighting(int prog)
     glUniform4fv( glGetUniformLocation(prog, "diffuseProduct"), 1, (float*)(&diffuse_product) );
     glUniform4fv( glGetUniformLocation(prog, "specularProduct"), 1, (float*)(&specular_product) );
 	glUniform4fv( glGetUniformLocation(prog, "lightPos"), 1, (float*)(&light_position) );
-	glUniform1f( glGetUniformLocation(prog, "shininess"), material_shininess );
+	glUniform1f ( glGetUniformLocation(prog, "shininess"), material_shininess );
 }
 
 void initMVP(int shader, mat4 m, mat4 v)
@@ -577,22 +572,7 @@ void drawPlanet()
 		mat4 matR = multiplymat4(rotateY(rotationSpeedArray[i]), rotateX(planetInstanceArray[i].axialTilt+45.0));
 		m = multiplymat4(matT,matR);
 		//planetInstanceArray[i].planetLocation = m;
-		
-		/*
-		for(int i = 0; i < 4; i++) {
-			for(int j = 0; j < 4; j++) {
-				printf("%f", matT.m[i][j]);
-			}
-			printf("\n");
-		}
-		for(int i = 0; i < 4; i++) {
-			for(int j = 0; j < 4; j++) {
-				printf("%f", m.m[i][j]);
-			}
-			printf("\n");
-		}
-		printf("\n");
-    	*/
+
 		initMVP(planetShader, m, v);
     
     	glBindVertexArray (planetVAO);
@@ -612,10 +592,12 @@ void drawMoon()
 	setupLighting(planetShader);
 	v = getViewMatrix();
 	
-	mat4 rt = multiplymat4(rotateY(orbitSpeedArray[3]), translate(planetInstanceArray[3].radius*1000.0, 0.0, 0.0));
-	m = multiplymat4(multiplymat4(rt, translate(10.0, 0.0, 0.0)), scale(100.0));
+	translation.x = planetInstanceArray[2].radius * cos(orbitSpeedArray[2]*10.0);
+	translation.y = 0.0;
+	translation.z = planetInstanceArray[2].radius * sin(orbitSpeedArray[2]*10.0);
 	
-	//mv = modelMatrices[i];
+	m = multiplymat4(multiplymat4(translate(planetInstanceArray[3].radius, 0.0, 0.0),translatevec3(translation)), scale(planetInstanceArray[2].size));
+	
 	initMVP(planetShader, m, v);
     
     glBindVertexArray (planetVAO);
@@ -625,7 +607,7 @@ void drawMoon()
     glBindTexture(GL_TEXTURE_2D, planetInstanceArray[2].normal);
  	glUniform1i(glGetUniformLocation(planetShader, "tex"), 0);
     glUniform1i(glGetUniformLocation(planetShader, "normalTex"), 1);
-    //glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber );
+    glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber );
     glBindVertexArray(0);
 }
 
@@ -763,7 +745,7 @@ int main(int argc, char *argv[])
 		glDisable(GL_BLEND);
 		//glFrontFace(GL_CCW);
 		drawObj();
-		drawMoon();
+		//drawMoon();
 		
 		//drawButton(button1);
 		//drawPlanetButtons();

@@ -22,8 +22,9 @@ void main()
 {	
 	gl_Position = vPosition*model*view*projection;
 	mat3 normalMatrix = transpose(inverse(mat3(model)));
-	vec3 T = normalize(normalMatrix * vTangent);
-	vec3 N = normalize(normalMatrix * vNormal);
+	vec3 T = normalize(vec3(vec4(vTangent, 0.0) * model));
+	vec3 N = normalize(vec3(vec4(vNormal, 0.0)) * normalMatrix);
+	T = normalize(T - dot(T, N) * N);
 	vec3 B = cross(N, T);
 	
 	vec3 lightDir = -normalize(vPosition*model - lightPos).xyz;
@@ -32,24 +33,27 @@ void main()
 	fL = vPosition.xyz;
 	vec3 v;
 	v.x = dot(lightDir, T);
-	v.x = dot(lightDir, B);
-	v.x = dot(lightDir, N);
+	v.y = dot(lightDir, B);
+	v.z = dot(lightDir, N);
 	if( lightPos.w != 0.0 ) {
-		fL = normalize(lightDir);//LightPosition.xyz - vPosition.xyz;
+		fL = normalize(v);//LightPosition.xyz - vPosition.xyz;
     }
 	
 	
     fN = vNormal*normalMatrix;
     
 	v.x = dot(vertexPosition, T);
-	v.x = dot(vertexPosition, B);
-	v.x = dot(vertexPosition, N);
-	fE = normalize(vertexPosition);
+	v.y = dot(vertexPosition, B);
+	v.z = dot(vertexPosition, N);
+	fE = normalize(v);
 	
 	vertexPosition = normalize(vertexPosition);
 	
-	vec3 halfVector = normalize(fL - fE);
-	fH = halfVector;
+	vec3 halfVector = normalize(lightDir - vertexPosition);
+	v.x = dot(halfVector, T);
+	v.y = dot(halfVector, B);
+	v.z = dot(halfVector, N);
+	fH = v;
 	
     TexCoords = vPosition;
 }

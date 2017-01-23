@@ -6,6 +6,7 @@ in vec3 fE;
 in vec3 fH;
 in vec4 TexCoords;
 out vec4 FragColor;
+in vec3 vc;
 
 uniform vec4 ambientProduct, diffuseProduct, specularProduct;
 uniform float shininess;
@@ -19,7 +20,7 @@ void main()
                                   (asin(TexCoords.z) / 3.1415926 + 0.5));
     vec3 color = vec3(texture(tex, longlat));
     vec3 N = 2.0*vec3(texture(normalTex, longlat))-1.0;
-    N = normalize(fN);
+    N = normalize(N);
     
     float Kd = max(dot(fL, N), 0.0);
     float Ks = pow(max(dot(N, fH), 0.0), shininess);
