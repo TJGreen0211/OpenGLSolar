@@ -17,6 +17,7 @@ typedef struct planetParameters {
 	int createAtmosphere;
 	GLuint texture;
 	GLuint normal;
+	GLuint displacement;
 	mat4 planetLocation;
 	
 } planetParameters;
@@ -129,6 +130,27 @@ int *loadPlanetNormals(int planetTexArray[])
 	return planetTexArray;
 }
 
+int *loadPlanetDisplacementMap(int planetTexArray[])
+{
+	char *textureStrings[] = {"include/textures/Planets/earthDisplacement.png", 
+		"include/textures/Planets/earthDisplacement.png", 
+		"include/textures/Planets/earthDisplacement.png",
+		"include/textures/Planets/jupiterDisplacement.png",
+		"include/textures/Planets/jupiterDisplacement.png",
+		"include/textures/Planets/jupiterDisplacement.png",
+		"include/textures/Planets/jupiterDisplacement.png",
+		"include/textures/Planets/jupiterDisplacement.png",
+		"include/textures/Planets/jupiterDisplacement.png",
+		"include/textures/Planets/jupiterDisplacement.png",
+		"include/textures/Planets/jupiterDisplacement.png"};
+	int arraySize = sizeof(textureStrings)/sizeof(textureStrings[0]);
+	for(int i = 0; i < arraySize; i++)
+	{
+		planetTexArray[i] = loadTexture(textureStrings[i]);
+	}
+	return planetTexArray;
+}
+
 void planetBuilder()
 {
 	planetParameters mercury, venus, earth, mars, eris, jupiter, saturn, uranus, neptune, pluto, ceres;
@@ -139,17 +161,31 @@ void planetBuilder()
 	int planetNormArray[numTextures];
 	*planetNormArray = *loadPlanetNormals(planetNormArray);	
 	
-	mercury.radius = 0.4*planetRadMult; mercury.size = 0.38*planetScaleMult; mercury.orbit = 0.240846; mercury.axialTilt = 0.034; mercury.day = 58.646; mercury.createAtmosphere = 0; mercury.texture = planetTexArray[0]; mercury.normal = planetNormArray[0];
-	venus.radius = 0.7*planetRadMult; venus.size = 0.9499*planetScaleMult; venus.orbit = 0.615198; venus.axialTilt = 177.36; venus.day = 243.025; venus.createAtmosphere = 1; venus.texture = planetTexArray[1]; venus.normal = planetNormArray[1];
-	earth.radius = 1.0*planetRadMult; earth.size = 1.0*planetScaleMult; earth.orbit = 1.0; earth.axialTilt = 23.4392811; earth.day = 1; earth.createAtmosphere = 1; earth.texture = planetTexArray[2]; earth.normal = planetNormArray[2];
-	mars.radius = 1.5*planetRadMult; mars.size = 0.533*planetScaleMult; mars.orbit = 1.88; mars.axialTilt = 25.19; mars.day = 1.025957; mars.createAtmosphere = 1; mars.texture = planetTexArray[3]; mars.normal = planetNormArray[3];
-	ceres.radius = 2.77*planetRadMult; ceres.size = 0.07*planetScaleMult; ceres.orbit = 4.6; ceres.axialTilt = 4; ceres.day = 0.3781; ceres.createAtmosphere = 1; ceres.texture = planetTexArray[4]; ceres.normal = planetNormArray[4];
-	jupiter.radius = 5.2*planetRadMult; jupiter.size = 11.209*planetScaleMult; jupiter.orbit = 11.8618; jupiter.axialTilt = 3.13; jupiter.day = 0.413; jupiter.createAtmosphere = 0; jupiter.texture = planetTexArray[5]; jupiter.normal = planetNormArray[5];
-	saturn.radius = 9.5*planetRadMult; saturn.size = 9.45*planetScaleMult; saturn.orbit = 29.4571; saturn.axialTilt = 26.73; saturn.day = 0.439583; saturn.createAtmosphere = 0; saturn.texture = planetTexArray[6]; saturn.normal = planetNormArray[6];
-	uranus.radius = 19.2*planetRadMult; uranus.size = 4.007*planetScaleMult; uranus.orbit = 84.0205; uranus.axialTilt = 97.77; uranus.day = 0.71833; uranus.createAtmosphere = 0; uranus.texture = planetTexArray[7]; uranus.normal = planetNormArray[7];
-	neptune.radius = 30.1*planetRadMult; neptune.size = 3.883*planetScaleMult; neptune.orbit = 164.8; neptune.axialTilt = 28.32; neptune.day = 0.6713; neptune.createAtmosphere = 0; neptune.texture = planetTexArray[8]; neptune.normal = planetNormArray[8];
-	pluto.radius = 39*planetRadMult; pluto.size = 0.18*planetScaleMult; pluto.orbit = 248; pluto.axialTilt = 119.591; pluto.day = 6.387230; pluto.createAtmosphere = 1; pluto.texture = planetTexArray[9]; pluto.normal = planetNormArray[9];
-	eris.radius = 68*planetRadMult; eris.size = 0.182*planetScaleMult; eris.orbit = 558.04; eris.axialTilt = 61.45; eris.day = 1.079167 ; eris.createAtmosphere = 0; eris.texture = planetTexArray[10]; eris.normal = planetNormArray[10];
+	int planetDisplacementArray[numTextures];
+	*planetDisplacementArray = *loadPlanetDisplacementMap(planetDisplacementArray);
+	
+	mercury.radius = 0.4*planetRadMult; mercury.size = 0.38*planetScaleMult; mercury.orbit = 0.240846; mercury.axialTilt = 0.034; mercury.day = 58.646; mercury.createAtmosphere = 0; 
+	mercury.texture = planetTexArray[0]; mercury.normal = planetNormArray[0]; mercury.displacement = planetDisplacementArray[0];
+	venus.radius = 0.7*planetRadMult; venus.size = 0.9499*planetScaleMult; venus.orbit = 0.615198; venus.axialTilt = 177.36; venus.day = 243.025; venus.createAtmosphere = 1; 
+	venus.texture = planetTexArray[1]; venus.normal = planetNormArray[1]; venus.displacement = planetDisplacementArray[1];
+	earth.radius = 1.0*planetRadMult; earth.size = 1.0*planetScaleMult; earth.orbit = 1.0; earth.axialTilt = 23.4392811; earth.day = 1; earth.createAtmosphere = 1; 
+	earth.texture = planetTexArray[2]; earth.normal = planetNormArray[2]; earth.displacement = planetDisplacementArray[2];
+	mars.radius = 1.5*planetRadMult; mars.size = 0.533*planetScaleMult; mars.orbit = 1.88; mars.axialTilt = 25.19; mars.day = 1.025957; mars.createAtmosphere = 1; 
+	mars.texture = planetTexArray[3]; mars.normal = planetNormArray[3]; mars.displacement = planetDisplacementArray[3];
+	ceres.radius = 2.77*planetRadMult; ceres.size = 0.07*planetScaleMult; ceres.orbit = 4.6; ceres.axialTilt = 4; ceres.day = 0.3781; ceres.createAtmosphere = 1; 
+	ceres.texture = planetTexArray[4]; ceres.normal = planetNormArray[4]; ceres.displacement = planetDisplacementArray[4];
+	jupiter.radius = 5.2*planetRadMult; jupiter.size = 11.209*planetScaleMult; jupiter.orbit = 11.8618; jupiter.axialTilt = 3.13; jupiter.day = 0.413; jupiter.createAtmosphere = 0; 
+	jupiter.texture = planetTexArray[5]; jupiter.normal = planetNormArray[5]; jupiter.displacement = planetDisplacementArray[5];
+	saturn.radius = 9.5*planetRadMult; saturn.size = 9.45*planetScaleMult; saturn.orbit = 29.4571; saturn.axialTilt = 26.73; saturn.day = 0.439583; saturn.createAtmosphere = 0; 
+	saturn.texture = planetTexArray[6]; saturn.normal = planetNormArray[6]; saturn.displacement = planetDisplacementArray[6];
+	uranus.radius = 19.2*planetRadMult; uranus.size = 4.007*planetScaleMult; uranus.orbit = 84.0205; uranus.axialTilt = 97.77; uranus.day = 0.71833; uranus.createAtmosphere = 0; 
+	uranus.texture = planetTexArray[7]; uranus.normal = planetNormArray[7]; uranus.displacement = planetDisplacementArray[7];
+	neptune.radius = 30.1*planetRadMult; neptune.size = 3.883*planetScaleMult; neptune.orbit = 164.8; neptune.axialTilt = 28.32; neptune.day = 0.6713; neptune.createAtmosphere = 0; 
+	neptune.texture = planetTexArray[8]; neptune.normal = planetNormArray[8]; neptune.displacement = planetDisplacementArray[8];
+	pluto.radius = 39*planetRadMult; pluto.size = 0.18*planetScaleMult; pluto.orbit = 248; pluto.axialTilt = 119.591; pluto.day = 6.387230; pluto.createAtmosphere = 1; 
+	pluto.texture = planetTexArray[9]; pluto.normal = planetNormArray[9]; pluto.displacement = planetDisplacementArray[9];
+	eris.radius = 68*planetRadMult; eris.size = 0.182*planetScaleMult; eris.orbit = 558.04; eris.axialTilt = 61.45; eris.day = 1.079167 ; eris.createAtmosphere = 0; 
+	eris.texture = planetTexArray[10]; eris.normal = planetNormArray[10]; eris.displacement = planetDisplacementArray[10];
 	
 	planetInstanceArray[0] = mercury;
 	planetInstanceArray[1] = venus;
@@ -581,7 +617,6 @@ void drawAtmosphere()
 			glBindVertexArray(0);
 		}
     }
-    printf("\n");
     glDisable(GL_BLEND);
 }
 
@@ -606,8 +641,10 @@ void drawPlanet()
     	glBindVertexArray (planetVAO);
     	bindTexture(GL_TEXTURE0, planetInstanceArray[i].texture);
     	bindTexture(GL_TEXTURE1, planetInstanceArray[i].normal);
+    	bindTexture(GL_TEXTURE2, planetInstanceArray[i].displacement);
     	glUniform1i(glGetUniformLocation(planetShader, "tex"), 0);
     	glUniform1i(glGetUniformLocation(planetShader, "normalTex"), 1);
+    	glUniform1i(glGetUniformLocation(planetShader, "depthMap"), 2);
     	glUniformMatrix4fv( glGetUniformLocation(planetShader, "translation" ), 1, GL_FALSE, &matT.m[0][0] );
     	glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber);
     	glBindVertexArray(0);
@@ -779,11 +816,11 @@ int main(int argc, char *argv[])
 		if(stopRotation == 0){
 			for(int i = 0; i < 11; i++)
 			{
-				orbitSpeedArray[i] += 0.005/planetInstanceArray[i].orbit;
+				orbitSpeedArray[i] += 0.001/planetInstanceArray[i].orbit;
 			}
 			for(int i = 0; i < 11; i++)
 			{
-				rotationSpeedArray[i] += 0.5/planetInstanceArray[i].day;
+				rotationSpeedArray[i] += 0.001/planetInstanceArray[i].day;
 			}
 			theta += 0.009;
 		}
