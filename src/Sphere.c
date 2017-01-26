@@ -3,10 +3,6 @@ int NumTimesToSubdivide;
 int NumTriangles;
 int NumVertices;
 
-vec3 *triPoints;
-vec3 *triNorms;
-vec2 *tex;
-
 sphere newSphere;
 
 int Index = 0;
@@ -22,9 +18,9 @@ void triangle(vec3 a, vec3 b, vec3 c)
 	two.z = c.z - b.z;
 
 	vec3 normal = normalizevec3(crossvec3(one, two));
-	triNorms[Index] = normal; triPoints[Index] = a; Index++;
-	triNorms[Index] = normal; triPoints[Index] = b; Index++;
-	triNorms[Index] = normal; triPoints[Index] = c; Index++;
+	newSphere.normals[Index] = normal; newSphere.points[Index] = a; Index++;
+	newSphere.normals[Index] = normal; newSphere.points[Index] = b; Index++;
+	newSphere.normals[Index] = normal; newSphere.points[Index] = c; Index++;
 }
 
 vec3 unitCircle(vec3 p)
@@ -62,11 +58,11 @@ sphere tetrahedron(int count)
 	NumTriangles = pow(4, count+1);
 	NumVertices = 3 * NumTriangles;
 	
-	int mallocVertSize = NumVertices*sizeof(triPoints[0]);
-	int mallocNormSize = NumVertices*sizeof(triNorms[0]);
+	int mallocVertSize = NumVertices*sizeof(vec3);
+	int mallocNormSize = NumVertices*sizeof(vec3);
 	
-	triPoints = malloc(mallocVertSize);
-	triNorms = malloc(mallocNormSize);
+	newSphere.points = malloc(mallocVertSize);
+	newSphere.normals = malloc(mallocNormSize);
 	
 	vec3 v[4] = {
 		{ 0.0, 0.0, 1.0 },
@@ -80,17 +76,8 @@ sphere tetrahedron(int count)
     divideTriangle( v[0], v[3], v[1], count );
     divideTriangle( v[0], v[2], v[3], count );
     
-    newSphere.points = malloc(mallocVertSize);
-    newSphere.normals = malloc(mallocNormSize);
     newSphere.vertexNumber = NumVertices;
     newSphere.size = mallocVertSize;
     newSphere.nsize = mallocNormSize;
-    for(int i = 0; i < NumVertices; i++)
-	{
-		newSphere.points[i] = triPoints[i];
-		newSphere.normals[i] = triNorms[i];
-	}
-	free(triPoints);
-	free(triNorms);
 	return newSphere;
 }

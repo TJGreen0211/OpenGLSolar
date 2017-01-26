@@ -1,8 +1,11 @@
 #version 410
 
 uniform float time;
+uniform float E;
 uniform vec3 camPosition;
 uniform vec3 translation;
+uniform vec3 C_R;
+
 
 in vec4 fPosition;
 in vec3 fNormal;
@@ -16,10 +19,10 @@ const float degToRad = PI / 180.0;
 const float MAX = 10000.0;
 
 const float DEG_TO_RAD = PI / 180.0;
-float K_R = 0.166;
-const float K_M = 0.0025;
-const float E = 14.3;
-const vec3 C_R = vec3(0.3, 0.7, 1.0);
+float K_R = 0.166;//Rayleigh constant > thicker
+const float K_M = 0.0025;//Mie constant > thicker
+//const float E = 14.3;//Sun brightness
+//const vec3 C_R = vec3(0.3, 0.7, 1.0);
 const float G_M = -0.85;
 
 uniform float fInnerRadius;
@@ -32,17 +35,6 @@ const int numOutScatter = 10;
 const float fNumOutScatter = 10.0;
 const int numInScatter = 10;
 const float fNumInScatter = 10.0;
-
-mat3 rot3xy( vec2 angle ) {
-	vec2 c = cos( angle );
-	vec2 s = sin( angle );
-	
-	return mat3(
-		c.y      ,  0.0, -s.y,
-		s.y * s.x,  c.x,  c.y * s.x,
-		s.y * c.x, -s.x,  c.y * c.x
-	);
-}
 
 vec3 rayDirection(vec3 camPosition) {
 	vec4 ray = m*fPosition - vec4(camPosition, 1.0);
@@ -108,33 +100,17 @@ float optic(vec3 p, vec3 q) {
 }
 
 vec3 inScatter(vec3 o, vec3 dir, vec2 e, vec3 l) {
-	//fSampleLength = fFar / fSamples;
 	float len = (e.y - e.x) / fNumInScatter;
-	
-	//v3SampleRay = v3Ray * fSampleLength;
 	vec3 step = dir * len;
-	//v3Start = v3CameraPos + v3Ray * fNear;
 	vec3 p = o + dir * e.x;
-	
-	//fCameraAngle = dot(v3Ray, v3SamplePoint) / fHeight;
-	//v3SamplePoint = v3Start + v3SampleRay * 0.5;
 	vec3 v = p + dir * (len * 0.5);
 	
 	vec3 sum = vec3(0.0);
-	for(int i = 0; i < numInScatter; i++) {
-		
+	for(int i = 0; i < numInScatter; i++) {	
 		vec2 f = rayIntersection(v, l, fOuterRadius);
-		
-		//fLightAngle = dot(v3LightDir, v3SamplePoint) / fHeight;
 		vec3 u = v + l * f.y;
-		
-		//fScatter = scale() * scale()
 		float n = (optic(p, v) + optic(v, u))*(PI * 4.0);
-		
-		//density() = //exp(fScaleOverScaleDepth * (fInnerRadius - fHeight));
-		//v3Attenuate = * exp(-fScatter * (v3InvWavelength * fKr4PI + fKm4PI));
 		sum += density(v)* exp(-n * ( K_R * C_R + K_M ));
-		//v3SamplePoint += v3SampleRay;
 		v += step;
 	}
 	sum *= len * SCALE_L;
@@ -145,25 +121,13 @@ vec3 inScatter(vec3 o, vec3 dir, vec2 e, vec3 l) {
 
 void main (void)
 {
-	mat4 modelmat = mat4(
-		1.000000, 0.000000, 0.000000, translation.x, 
-		0.000000, 1.00000, 0.000000, translation.y, 
-		0.000000, 0.000000, 1.00000, translation.z, 
-		0.000000, 0.000000, 0.000000, 1.000000);
-	
-	mat4 tv = transpose(modelmat*v);//[3].xyz * mat3(v);
-	vec3 camPosition = vec3(-tv[3] * tv);//-transpose(mat3(v))*v[3].xyz;
 	vec3 dir = rayDirection(camPosition);
 	vec3 eye = camPosition;
 	
 	vec3 l = -normalize(vec3(fPosition*m - vec4(0.0, 0.0, 1.0, 1.0)));
-	
-	//mat3 rot = rot3xy( vec2( 0.0, time * 0.5 ) );
-	//l = rot * l;
-	
 	vec2 e = rayIntersection(eye, dir, fOuterRadius);
 	if ( e.x > e.y ) {
-		//discard;
+		discard;
 	}
 	vec2 f = rayIntersection(eye, dir, fInnerRadius);
 	e.y = min(e.y, f.x);
