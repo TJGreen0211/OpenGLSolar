@@ -4,7 +4,8 @@ const float toRadians = M_PI / 180.0;
 
 GLfloat Yaw = -90.0f;
 GLfloat Pitch = 0.0f;
-GLfloat MovementSpeed = 1000.0f;
+GLfloat MovementSpeed = 500.0f;
+GLfloat maxSpeed = 2000.0f;
 GLfloat MouseSensitivity = 0.6f;
 GLfloat Zoom = 45.0f;
 
@@ -48,9 +49,11 @@ void updateCameraVectors()
 	Up = normalizevec3(crossvec3(Right, Front));
 }
 
-void processKeyboard(enum Camera_Movement direction, GLfloat deltaTime)
+void processKeyboard(enum Camera_Movement direction, GLfloat deltaTime, GLfloat deltaSpeed)
 {
-	GLfloat velocity = MovementSpeed * deltaTime;
+	if(deltaSpeed > maxSpeed)
+		deltaSpeed = maxSpeed;
+	GLfloat velocity = MovementSpeed * deltaTime + deltaSpeed;
 	
     if (direction == FORWARD)
         Position = plusequalvec3(Position, scalarMultvec3(Right, velocity));

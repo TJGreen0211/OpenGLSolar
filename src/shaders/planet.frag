@@ -15,7 +15,7 @@ uniform sampler2D tex;
 uniform sampler2D normalTex;
 uniform sampler2D depthMap;
 
-float height_scale = 0.5;
+float height_scale = 0.1;
 
 vec2 parallaxMapping(vec2 texCoords)
 {
@@ -30,7 +30,7 @@ void main()
                                   (asin(TexCoords.z) / 3.1415926 + 0.5));
     vec2 D = parallaxMapping(longlat);
     vec3 color = vec3(texture(tex, longlat));
-    vec3 N = 2.0*vec3(texture(normalTex, D))-1.0;
+    vec3 N = 2.0*vec3(texture(normalTex, longlat))-1.0;
     
     N = normalize(N);
     

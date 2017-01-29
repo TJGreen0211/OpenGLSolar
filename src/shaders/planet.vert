@@ -16,7 +16,6 @@ uniform mat4 view;
 uniform mat4 projection;
 uniform mat4 translation;
 uniform vec4 lightPos;
-uniform vec3 camPosition;
 
 void main()
 {	

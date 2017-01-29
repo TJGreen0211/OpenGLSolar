@@ -1,7 +1,4 @@
 #include "Sphere.h"
-int NumTimesToSubdivide;
-int NumTriangles;
-int NumVertices;
 
 sphere newSphere;
 
@@ -54,12 +51,11 @@ void divideTriangle(vec3 a, vec3 b, vec3 c, int count)
 
 sphere tetrahedron(int count)
 {
-	NumTimesToSubdivide = count;
-	NumTriangles = pow(4, count+1);
-	NumVertices = 3 * NumTriangles;
+	int numTriangles = pow(4, count+1);
+	int numVertices = 3 * numTriangles;
 	
-	int mallocVertSize = NumVertices*sizeof(vec3);
-	int mallocNormSize = NumVertices*sizeof(vec3);
+	int mallocVertSize = numVertices*sizeof(vec3);
+	int mallocNormSize = numVertices*sizeof(vec3);
 	
 	newSphere.points = malloc(mallocVertSize);
 	newSphere.normals = malloc(mallocNormSize);
@@ -76,7 +72,7 @@ sphere tetrahedron(int count)
     divideTriangle( v[0], v[3], v[1], count );
     divideTriangle( v[0], v[2], v[3], count );
     
-    newSphere.vertexNumber = NumVertices;
+    newSphere.vertexNumber = numVertices;
     newSphere.size = mallocVertSize;
     newSphere.nsize = mallocNormSize;
 	return newSphere;

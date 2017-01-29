@@ -13,6 +13,7 @@
 #include "LinearAlg.h"
 #include "Camera.h"
 #include "Sphere.h"
+#include "Geometry.h"
 #include "Obj.h"
 #include "GUI.h"
 #include "SOIL/SOIL.h"
