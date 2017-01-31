@@ -4,9 +4,9 @@ in vec3 fN;
 in vec3 fL;
 in vec3 fE;
 in vec3 fH;
+in vec3 fV;
 in vec4 TexCoords;
 out vec4 FragColor;
-in vec3 vc;
 
 uniform vec4 ambientProduct, diffuseProduct, specularProduct;
 uniform float shininess;
@@ -17,18 +17,18 @@ uniform sampler2D depthMap;
 
 float height_scale = 0.1;
 
-vec2 parallaxMapping(vec2 texCoords)
+vec2 parallaxMapping(vec2 coords)
 {
-	float height = texture(depthMap, texCoords).r;
-	vec2 p = fE.xy / fE.z * (height * height_scale);
-	return texCoords - p;
+	float height = texture(depthMap, coords.xy).r;
+	vec2 p = TexCoords.xy / TexCoords.z * (height * height_scale);
+	return coords.xy - p;
 }
 
 void main()
 {	
-	vec2 longlat = vec2((atan(TexCoords.y, TexCoords.x) / 3.1415926 + 1.0) * 0.5,
+    vec2 D = parallaxMapping(TexCoords.xy);
+    vec2 longlat = vec2((atan(D.y, D.x) / 3.1415926 + 1.0) * 0.5,
                                   (asin(TexCoords.z) / 3.1415926 + 0.5));
-    vec2 D = parallaxMapping(longlat);
     vec3 color = vec3(texture(tex, longlat));
     vec3 N = 2.0*vec3(texture(normalTex, longlat))-1.0;
     

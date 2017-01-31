@@ -8,6 +8,7 @@ out vec3 fN;
 out vec3 fE;
 out vec3 fL;
 out vec3 fH;
+out vec3 fV;
 
 out vec4 TexCoords;
 
@@ -16,6 +17,7 @@ uniform mat4 view;
 uniform mat4 projection;
 uniform mat4 translation;
 uniform vec4 lightPos;
+uniform vec3 camPosition;
 
 void main()
 {	
@@ -38,7 +40,6 @@ void main()
 		fL = normalize(v);//LightPosition.xyz - vPosition.xyz;
     }
 	
-	
     fN = vNormal*normalMatrix;
     
 	v.x = dot(vertexPosition, T);
@@ -46,7 +47,14 @@ void main()
 	v.z = dot(vertexPosition, N);
 	fE = normalize(v);
 	
+	vec3 ray = vec3(model*vPosition) - camPosition;
+	v.x = dot(ray, T);
+	v.y = dot(ray, B);
+	v.z = dot(ray, N);
+	fV = normalize(vertexPosition);
+	
 	vertexPosition = normalize(vertexPosition);
+	
 	
 	vec3 halfVector = normalize(lightDir - vertexPosition);
 	v.x = dot(halfVector, T);
