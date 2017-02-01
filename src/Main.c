@@ -288,20 +288,22 @@ void moonBuilder()
 	europa.planet = 5; europa.radius = 1.742597*moonRadMult; europa.size = 0.24329*planetScaleMult; europa.orbit = 0.009703; europa.day = 0.0; europa.texture = texArray[4];
 	ganymede.planet = 5; ganymede.radius = 2.779221*moonRadMult; ganymede.size = 0.206498*planetScaleMult; ganymede.orbit = 0.292123 ; ganymede.day = 0.0; ganymede.texture = texArray[5];
 	io.planet = 5; io.radius = 0.680519*moonRadMult; io.size = 0.142936*planetScaleMult; io.orbit = 0.004849; io.day = 0.0; io.texture = texArray[6];
-	dione.planet = 6;
-	enceladus.planet = 6;
-	iapetus.planet = 6;
-	mimas.planet = 6;
-	rhea.planet = 6;
-	tethys.planet = 6;
-	titan.planet = 6;
-	ariel.planet = 7;
-	miranda.planet = 7;
-	oberon.planet = 7;
-	titania.planet = 7;
-	umbriel.planet = 7;
-	triton.planet = 8;
-	charon.planet = 9;
+	
+	dione.planet = 6; dione.radius = 0.98026*moonRadMult; dione.size = 0.088134*planetScaleMult; dione.orbit = 0.006849 ; dione.day = 0.0; dione.texture = texArray[7];
+	enceladus.planet = 6; enceladus.radius = 0.384179*moonRadMult; enceladus.size = 0.024643*planetScaleMult; enceladus.orbit = 0.003753; enceladus.day = 0.0; enceladus.texture = texArray[8];
+	iapetus.planet = 6; iapetus.radius = 35.224156*moonRadMult; iapetus.size = 0.115461*planetScaleMult; iapetus.orbit = 0.216438; iapetus.day = 0.0; iapetus.texture = texArray[9];
+	mimas.planet = 6; mimas.radius = 0.481919*moonRadMult; mimas.size = 0.010909*planetScaleMult; mimas.orbit = 0.002581; mimas.day = 0.0; mimas.texture = texArray[10];
+	rhea.planet = 6; rhea.radius = 1.368935*moonRadMult; rhea.size = 0.119918*planetScaleMult; rhea.orbit = 0.012329; rhea.day = 0.0; rhea.texture = texArray[11];
+	tethys.planet = 6; tethys.radius = 0.766234*moonRadMult; tethys.size = 0.04183*planetScaleMult; tethys.orbit = 0.005171; tethys.day = 0.0; tethys.texture = texArray[12];
+	titan.planet = 6; titan.radius = 3.173688*moonRadMult; titan.size = 0.404175*planetScaleMult; titan.orbit = 0.043607; titan.day = 0.0; titan.texture = texArray[13];
+	
+	ariel.planet = 7; ariel.radius = 0.495844*moonRadMult; ariel.size = 0.0908*planetScaleMult; ariel.orbit = 0.006545; ariel.day = 0.0; ariel.texture = texArray[14];
+	miranda.planet = 7; miranda.radius = 0.336078*moonRadMult; miranda.size = 0.036886*planetScaleMult; miranda.orbit = 0.003836; miranda.day = 0.0; miranda.texture = texArray[15];
+	oberon.planet = 7; oberon.radius = 1.513247*moonRadMult; oberon.size = 0.1194*planetScaleMult; oberon.orbit = 0.036886; oberon.day = 0.0; oberon.texture = texArray[16];
+	titania.planet = 7; titania.radius = 1.132234*moonRadMult; titania.size = 0.1235*planetScaleMult; titania.orbit = 0.023836; titania.day = 0.0; titania.texture = texArray[17];
+	umbriel.planet = 7; umbriel.radius = 0.429151*moonRadMult; umbriel.size = 0.091822*planetScaleMult; umbriel.orbit = 0.011342; umbriel.day = 0.0; umbriel.texture = texArray[18];
+	triton.planet = 8; triton.radius = 0.921452*moonRadMult; triton.size = 0.2122*planetScaleMult; triton.orbit = -0.016101; triton.day = 0.0; triton.texture = texArray[19];
+	charon.planet = 9; charon.radius = 0.045548*moonRadMult; charon.size = 0.095*planetScaleMult; charon.orbit = 0.017479; charon.day = 0.0; charon.texture = texArray[20];
 	
 	moonInstanceArray[0] = moon;
 	moonInstanceArray[1] = phobos;
@@ -823,7 +825,7 @@ void drawMoon()
 	glUseProgram(planetShader);
 	setupLighting(planetShader);
 	int c = 0;
-	for(int i = 0; i < 6; i++)
+	for(int i = 0; i < 11; i++)
 	{
 		for(int j = 0; j < planetInstanceArray[i].numMoons; j++) {
 			
@@ -846,7 +848,7 @@ void drawMoon()
 			glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber );
 			glBindVertexArray(0);
 			c++;
-			printf("c: %f i: %d, j: %d\n", moonInstanceArray[c].radius, i, j);
+			//printf("c: %f i: %d, j: %d\n", moonInstanceArray[c].radius, i, j);
 		}
     }
 }
