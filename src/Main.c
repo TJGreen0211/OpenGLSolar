@@ -603,6 +603,7 @@ void init()
 	initObject();
 	initAtmosphere();
 	initPlanetRing();
+	initGui();
 	
     glEnable(GL_DEPTH_TEST);
 }
@@ -640,6 +641,7 @@ void initMVP(int shader, mat4 m, mat4 v)
 {
 	glUniformMatrix4fv(glGetUniformLocation( shader, "projection" ), 1, GL_FALSE, &p.m[0][0]);
 	glUniformMatrix4fv( glGetUniformLocation( shader, "model" ), 1, GL_FALSE, &m.m[0][0] );
+	//v = multiplymat4(getViewRotation(), planetTransform[1]);
 	glUniformMatrix4fv( glGetUniformLocation( shader, "view" ), 1, GL_FALSE, &v.m[0][0] );
 }
 
@@ -834,7 +836,7 @@ void drawMoon()
 			translation.y = 0.0;
 			translation.z = (moonInstanceArray[c].radius+planetInstanceArray[i].size) * sin(moonOrbitSpeedArray[c]);
 	
-			mat4 m = multiplymat4(multiplymat4(planetTransform[i],translatevec3(translation)), scale(moonInstanceArray[c].size));
+			mat4 m = multiplymat4(multiplymat4(multiplymat4(planetTransform[i],translatevec3(translation)), scale(moonInstanceArray[c].size)),rotateX(90.0));
 	
 			initMVP(planetShader, m, v);
 	
@@ -899,19 +901,19 @@ GLFWwindow *setupGLFW() {
 int initCubemap()
 {
 	char *cubemapArray[] = {
-		"include/textures/skybox3/right.png",
-		"include/textures/skybox3/left.png",
-		"include/textures/skybox3/top.png",
-		"include/textures/skybox3/bottom.png",
-		"include/textures/skybox3/back.png",
-		"include/textures/skybox3/front.png"
+		"include/textures/skybox1/right.png",
+		"include/textures/skybox1/left.png",
+		"include/textures/skybox1/top.png",
+		"include/textures/skybox1/bottom.png",
+		"include/textures/skybox1/back.png",
+		"include/textures/skybox1/front.png"
 	};
 	return loadCubemap(cubemapArray);
 }
 
 void initializePlanetButtons()
 {
-	button1 = initButton(1300.0, 700.0, 100.0, &button1, "include/textures/buttonUp.png");
+	button1 = initButton(0.0, 800.0, 100.0, &button1, "include/textures/startButton.png");
 	mercuryButton = initButton(100.0, 100.0, 50.0, &mercuryButton, "include/textures/buttons/mercury.png");
 	venusButton = initButton(200.0, 100.0, 50.0, &venusButton, "include/textures/buttons/venus.png");
 	earthButton = initButton(300.0, 100.0, 50.0, &earthButton, "include/textures/buttons/earth.png");
@@ -959,6 +961,8 @@ int main(int argc, char *argv[])
 	moonBuilder();
 	atmosphereBuilder();
 	init();
+	initButtons();
+	initPlanetUI();
 	createPerspectiveMatrix();
 	
 	initializePlanetButtons();
@@ -966,7 +970,6 @@ int main(int argc, char *argv[])
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_MULTISAMPLE);
 	glCullFace(GL_BACK);
-	attachGUIShaders();
 	
 	float fpsFrames= 0;
 	float lastTime = 0;
@@ -1001,7 +1004,8 @@ int main(int argc, char *argv[])
 		drawObj();
 		drawMoon();
 		
-		//drawButton(button1);
+		drawButton(button1);
+		//drawPlanetUI();
 		//drawPlanetButtons();
 		
 		if(stopRotation == 0){
@@ -1079,7 +1083,7 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 
 void checkButtonPress(imgButton b)
 {
-	if(mousePosX <= b.xTopRight && mousePosX >= b.xTopLeft && mousePosY >= b.yTopRight && mousePosY <= b.yBottomRight)
+	/*if(mousePosX <= b.xTopRight && mousePosX >= b.xTopLeft && mousePosY >= b.yTopRight && mousePosY <= b.yBottomRight)
 	{
 		if(stopRotation == 0) {
 			stopRotation = 1;
@@ -1089,7 +1093,7 @@ void checkButtonPress(imgButton b)
 			stopRotation = 0;
 			buttonState(1);
 		}
-	}
+	}*/
 }
 
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
