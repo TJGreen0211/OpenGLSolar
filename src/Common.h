@@ -13,6 +13,7 @@
 void createShader(GLuint *shader, char *vert, char *frag);
 GLuint loadCubemap(char **faces);
 GLuint loadTexture(char const * path);
+GLuint loadSpriteTexture(char const * path);
 //GLfloat frameCount();
 
 #endif

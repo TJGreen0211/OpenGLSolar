@@ -15,6 +15,7 @@
 #include "Sphere.h"
 #include "Geometry.h"
 #include "Obj.h"
+#include "Window.h"
 #include "gui/GUI.h"
 #include "SOIL/SOIL.h"
 #include "gui/PlanetsUI.h"

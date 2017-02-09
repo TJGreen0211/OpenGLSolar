@@ -28,17 +28,12 @@ typedef struct planetParameters {
 	
 } planetParameters;
 
+
 typedef struct atmosphereParameters {
 	float scaleFactor;
 	float E;
 	vec3 C_R;
 } atmosphereParameters;
-
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
-void mouse_callback(GLFWwindow* window, double xpos, double ypos);
-void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
-GLuint loadShader(char *vertex_path, char *fragement_path);
 
 int mousePosX, mousePosY;
 imgButton button1, mercuryButton, venusButton, earthButton, marsButton, 
@@ -64,7 +59,7 @@ GLuint sunNormal;
 GLuint moonTexture;
 GLuint skyboxShader, sunShader, planetShader, atmosphereShader, ringShader;
 GLuint vertUIShader, fragUIShader, UIShader;
-GLuint planetVAO, skyboxVAO, objectVAO, atmosphereVAO, ringVAO;
+GLuint planetVAO, skyboxVAO, objectVAO, atmosphereVAO;
 GLuint shadowFBO, depthMap, rboDepth;
 GLuint ModelView, projection, model, view;
 mat4 p, v;
@@ -82,24 +77,10 @@ atmosphereParameters atmosphereArray[11];
 moonParameters moonInstanceArray[21];
 
 mat4 modelMatrices[11];
-mat4 planetTransform[11];
-float orbitSpeedArray[11] = {0};
-float rotationSpeedArray[11] = {0};
-float moonOrbitSpeedArray[21] = {0};
 float planetScaleMult = 50.0;
 float planetRadMult = 2000.0;
 float moonRadMult = 500.0;
 vec3 translation;
-
-float getScreenWidth()
-{
-	return HEIGHT;
-}
-
-float getScreenHeight()
-{
-	return WIDTH;
-}
 
 int *loadPlanetTextures(int planetTexArray[])
 {
@@ -448,12 +429,12 @@ void initPlanet() {
 		
 }
 
-void initPlanetRing() {
+GLuint initPlanetRing() {
 	createShader(&ringShader, "src/shaders/ring.vert",
 		"src/shaders/ring.frag");
 	
 	GLuint vPosition, vNormal, vTexture;
-	GLuint ringVBO;
+	GLuint ringVBO, ringVAO;
 	
 	glGenVertexArrays(1, &ringVAO);
 	glBindVertexArray(ringVAO);
@@ -476,6 +457,8 @@ void initPlanetRing() {
     glEnableVertexAttribArray(vTexture);
     glVertexAttribPointer(vTexture, 2, GL_FLOAT, GL_FALSE, 2*sizeof(GLfloat), BUFFER_OFFSET(planetRing.size+planetRing.nsize));
     glBindVertexArray(0);
+    
+    return ringVAO;
 }
 
 
@@ -598,19 +581,13 @@ void init()
 		"src/shaders/sun.frag");
     
     initFramebuffer();
-    initPlanet();
-	initSkybox();
-	initObject();
-	initAtmosphere();
-	initPlanetRing();
-	initGui();
 	
     glEnable(GL_DEPTH_TEST);
 }
 
 void createPerspectiveMatrix()
 {
-	p = perspective(zoom*45.0, ASPECT, zNear, zFar);
+	p = perspective(zoom*45.0, getWindowWidth()/getWindowHeight(), zNear, zFar);
 }
 
 void setupLighting(int program)
@@ -641,7 +618,7 @@ void initMVP(int shader, mat4 m, mat4 v)
 {
 	glUniformMatrix4fv(glGetUniformLocation( shader, "projection" ), 1, GL_FALSE, &p.m[0][0]);
 	glUniformMatrix4fv( glGetUniformLocation( shader, "model" ), 1, GL_FALSE, &m.m[0][0] );
-	//v = multiplymat4(getViewRotation(), planetTransform[1]);
+	//v = multiplymat4(getViewRotation(), planetInstanceArray[i].planetLocation);
 	glUniformMatrix4fv( glGetUniformLocation( shader, "view" ), 1, GL_FALSE, &v.m[0][0] );
 }
 
@@ -732,7 +709,7 @@ void drawAtmosphere()
 			float fOuter = planetInstanceArray[i].size*scaleFactor;
 			float fInner = (planetInstanceArray[i].size);
 		
-			mat4 modelmat = planetTransform[i];
+			mat4 modelmat = planetInstanceArray[i].planetLocation;
 			mat4 tv = transposemat4(multiplymat4(modelmat, getViewPosition()));
 			vec4 camMult = {-tv.m[3][0], -tv.m[3][1], -tv.m[3][2], -tv.m[3][3]};
 			vec4 camPosition = multiplymat4vec4(tv, camMult);
@@ -758,7 +735,7 @@ void drawAtmosphere()
     glDisable(GL_BLEND);
 }
 
-void drawPlanet()
+void drawPlanet(float theta, GLuint vao)
 {   		
 	//drawAtmosphere(translation, planetInstanceArray[2].size, 1.025);
 	
@@ -766,22 +743,22 @@ void drawPlanet()
 	setupLighting(planetShader);
 	for(int i = 0; i < 11; i++)
 	{	
-		translation.x = planetInstanceArray[i].radius * cos(orbitSpeedArray[i]);
+		translation.x = planetInstanceArray[i].radius * cos(theta/planetInstanceArray[i].orbit);
 		translation.y = 0.0;
-		translation.z = planetInstanceArray[i].radius * sin(orbitSpeedArray[i]);
+		translation.z = planetInstanceArray[i].radius * sin(theta/planetInstanceArray[i].orbit);
 		mat4 matT = multiplymat4(translatevec3(translation), scale(planetInstanceArray[i].size));
-		mat4 matR = multiplymat4(rotateY(rotationSpeedArray[i]), rotateX(planetInstanceArray[i].axialTilt+45.0));
+		mat4 matR = multiplymat4(rotateY(theta/planetInstanceArray[i].day), rotateX(planetInstanceArray[i].axialTilt+45.0));
 		mat4 m = multiplymat4(matT,matR);
-		planetTransform[i] = translatevec3(translation);
+		planetInstanceArray[i].planetLocation = translatevec3(translation);
 		
-		mat4 modelmat = planetTransform[i];
+		mat4 modelmat = planetInstanceArray[i].planetLocation;
 		mat4 tv = transposemat4(multiplymat4(modelmat, getViewPosition()));
 		vec4 camMult = {-tv.m[3][0], -tv.m[3][1], -tv.m[3][2], -tv.m[3][3]};
 		vec4 camPosition = multiplymat4vec4(tv, camMult);
 
 		initMVP(planetShader, m, v);
     	
-    	glBindVertexArray (planetVAO);
+    	glBindVertexArray (vao);
     	bindTexture(GL_TEXTURE0, planetInstanceArray[i].texture);
     	bindTexture(GL_TEXTURE1, planetInstanceArray[i].normal);
     	bindTexture(GL_TEXTURE2, planetInstanceArray[i].displacement);
@@ -794,35 +771,37 @@ void drawPlanet()
     }
 }
 
-void drawPlanetRing() 
+void drawPlanetRing(GLuint vao) 
 {   
 	glUseProgram(ringShader);
 	setupLighting(ringShader);
 	
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	
 	for(int i = 0; i < 11; i++)
 	{	
 		if(planetInstanceArray[i].createRing) {
-			glEnable(GL_BLEND);
-			glBlendFunc(GL_ONE, GL_ONE);
 			glDisable(GL_CULL_FACE);
-			mat4 modelmat = planetTransform[i];
+			mat4 modelmat = planetInstanceArray[i].planetLocation;
 			mat4 m = multiplymat4(multiplymat4(modelmat, rotateX(planetInstanceArray[i].axialTilt+45.0)),scale(5.0));
 
 			initMVP(ringShader, m, v);
 	
-			glBindVertexArray (ringVAO);
+			glBindVertexArray (vao);
 			bindTexture(GL_TEXTURE0, ringTexture);
 			glUniform1i(glGetUniformLocation(ringShader, "tex"), 0);
 			glDrawArrays( GL_TRIANGLES, 0, planetRing.vertexNumber);
 			glBindVertexArray(0);
 			glEnable(GL_CULL_FACE);
 			
-			glDisable(GL_BLEND);
+			
 		}
 	}
+	glDisable(GL_BLEND);
 }
 
-void drawMoon()
+void drawMoon(float theta)
 {
 	glUseProgram(planetShader);
 	setupLighting(planetShader);
@@ -832,11 +811,11 @@ void drawMoon()
 		for(int j = 0; j < planetInstanceArray[i].numMoons; j++) {
 			
 	
-			translation.x = (moonInstanceArray[c].radius+planetInstanceArray[i].size) * cos(moonOrbitSpeedArray[c]);
+			translation.x = (moonInstanceArray[c].radius+planetInstanceArray[i].size) * cos(theta/moonInstanceArray[c].orbit);
 			translation.y = 0.0;
-			translation.z = (moonInstanceArray[c].radius+planetInstanceArray[i].size) * sin(moonOrbitSpeedArray[c]);
+			translation.z = (moonInstanceArray[c].radius+planetInstanceArray[i].size) * sin(theta/moonInstanceArray[c].orbit);
 	
-			mat4 m = multiplymat4(multiplymat4(multiplymat4(planetTransform[i],translatevec3(translation)), scale(moonInstanceArray[c].size)),rotateX(90.0));
+			mat4 m = multiplymat4(multiplymat4(multiplymat4(planetInstanceArray[i].planetLocation,translatevec3(translation)), scale(moonInstanceArray[c].size)),rotateX(90.0));
 	
 			initMVP(planetShader, m, v);
 	
@@ -877,25 +856,6 @@ void doMovement()
         processKeyboard(LEFT, deltaTime, deltaSpeed);
     if(keys == GLFW_KEY_D && actionPress == GLFW_PRESS)
         processKeyboard(RIGHT, deltaTime, deltaSpeed);
-}
-
-GLFWwindow *setupGLFW() {
-	glfwInit();
-	glfwWindowHint(GLFW_RESIZABLE, GL_TRUE);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
-	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-	glfwWindowHint(GLFW_SAMPLES, 4);
-	
-	GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "SolarSystem", NULL, NULL);
-	glfwMakeContextCurrent(window);
-	//glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_ENABLED);
-	glfwSetKeyCallback(window, key_callback);
-	glfwSetCursorPosCallback(window, mouse_callback);
-	glfwSetScrollCallback(window, scroll_callback);
-	glfwSetMouseButtonCallback(window, mouse_button_callback);
-	return window;
 }
 
 int initCubemap()
@@ -943,6 +903,7 @@ int main(int argc, char *argv[])
 	
 	GLFWwindow *window = setupGLFW();
 	GLuint skyboxTexture = initCubemap();
+	//initWindow();
 	
 	//GLFWwindow* window2 = glfwCreateWindow(500, 500, "SolarSystem", NULL, NULL);
 	//glfwMakeContextCurrent(window2);
@@ -956,13 +917,19 @@ int main(int argc, char *argv[])
 	
 	sunTexture = loadTexture("include/textures/Planets/sun2.jpg");
 	sunNormal = loadTexture("include/textures/Planets/sunNormal.png");
-	ringTexture = loadTexture("include/textures/Planets/saturnRing.png");
+	ringTexture = loadSpriteTexture("include/textures/Planets/saturnRing.png");
 	planetBuilder();
 	moonBuilder();
 	atmosphereBuilder();
 	init();
+	initPlanet();
+	initSkybox();
+	initObject();
+	initAtmosphere();
+	initGui();
 	initButtons();
 	initPlanetUI();
+	GLuint ringVAO = initPlanetRing();
 	createPerspectiveMatrix();
 	
 	initializePlanetButtons();
@@ -994,33 +961,22 @@ int main(int argc, char *argv[])
 		glfwPollEvents();
 		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		glViewport(0, 0, WIDTH, HEIGHT);
+		glViewport(0, 0, getWindowWidth(), getWindowHeight());
 
 		drawSkybox(skyboxTexture);
 		drawSun();
-		drawPlanet();
-		drawPlanetRing();
+		drawPlanet(theta, planetVAO);
+		drawPlanetRing(ringVAO);
 		drawAtmosphere();
 		drawObj();
-		drawMoon();
+		drawMoon(theta);
 		
 		drawButton(button1);
-		//drawPlanetUI();
+		//drawPlanetUI(glfwGetTime());
 		//drawPlanetButtons();
 		
 		if(stopRotation == 0){
-			for(int i = 0; i < 11; i++)
-			{
-				orbitSpeedArray[i] += 0.001/planetInstanceArray[i].orbit;
-			}
-			for(int i = 0; i < 11; i++)
-			{
-				rotationSpeedArray[i] += 0.1/planetInstanceArray[i].day;
-			}
-			for(int i = 0; i < 21; i++) {
-				moonOrbitSpeedArray[i] += 0.0001/moonInstanceArray[i].orbit;
-			}
-			theta += 0.009;
+			theta += 0.0005;
 		}
 		
 		glfwSwapBuffers(window);
@@ -1083,7 +1039,7 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 
 void checkButtonPress(imgButton b)
 {
-	/*if(mousePosX <= b.xTopRight && mousePosX >= b.xTopLeft && mousePosY >= b.yTopRight && mousePosY <= b.yBottomRight)
+	if(mousePosX <= b.xPos && mousePosX >= b.xPos+b.size && mousePosY >= b.yPos && mousePosY <= b.yPos-b.size)
 	{
 		if(stopRotation == 0) {
 			stopRotation = 1;
@@ -1093,7 +1049,7 @@ void checkButtonPress(imgButton b)
 			stopRotation = 0;
 			buttonState(1);
 		}
-	}*/
+	}
 }
 
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
