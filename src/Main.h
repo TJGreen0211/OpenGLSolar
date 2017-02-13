@@ -19,6 +19,7 @@
 #include "gui/GUI.h"
 #include "SOIL/SOIL.h"
 #include "gui/PlanetsUI.h"
+#include "PlanetBuilder.h"
 
 
 

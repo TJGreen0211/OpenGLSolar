@@ -2,39 +2,6 @@
 #include <stdio.h>
 #include <unistd.h>
 
-typedef struct moonParameters {
-	float radius;
-	float size;
-	float orbit;
-	float day;
-	int planet;
-	GLuint texture;
-	GLuint normal;
-} moonParameters;
-
-typedef struct planetParameters {
-	float radius; 
-	float size;
-	float orbit;
-	float axialTilt;
-	float day;
-	int createAtmosphere;
-	int createRing;
-	int numMoons;
-	GLuint texture;
-	GLuint normal;
-	GLuint displacement;
-	mat4 planetLocation;
-	
-} planetParameters;
-
-
-typedef struct atmosphereParameters {
-	float scaleFactor;
-	float E;
-	vec3 C_R;
-} atmosphereParameters;
-
 int mousePosX, mousePosY;
 imgButton button1, mercuryButton, venusButton, earthButton, marsButton, 
 	jupiterButton, saturnButton, uranusButton, neptuneButton;
@@ -55,11 +22,10 @@ float zoom = 1;
 
 GLuint sunTexture, ringTexture;
 GLuint sunNormal;
-	
-GLuint moonTexture;
+
 GLuint skyboxShader, sunShader, planetShader, atmosphereShader, ringShader;
 GLuint vertUIShader, fragUIShader, UIShader;
-GLuint planetVAO, skyboxVAO, objectVAO, atmosphereVAO;
+GLuint planetVAO, skyboxVAO, objectVAO;
 GLuint shadowFBO, depthMap, rboDepth;
 GLuint ModelView, projection, model, view;
 mat4 p, v;
@@ -69,294 +35,11 @@ GLfloat deltaSpeed;
 float deltaTimeOffset;
 GLfloat lastFrame = 0.0f;
 int stopRotation = 0;
+int drawGUI = 0;
 
 
 int numPlanets = 11;
-planetParameters planetInstanceArray[11];
-atmosphereParameters atmosphereArray[11];
-moonParameters moonInstanceArray[21];
-
-mat4 modelMatrices[11];
-float planetScaleMult = 50.0;
-float planetRadMult = 2000.0;
-float moonRadMult = 500.0;
 vec3 translation;
-
-int *loadPlanetTextures(int planetTexArray[])
-{
-	char *textureStrings[] = {"include/textures/Planets/mercury.jpg", 
-		"include/textures/Planets/venus.png", 
-		"include/textures/Planets/earth.jpg",
-		"include/textures/Planets/mars.jpg",
-		"include/textures/Planets/ceres.jpg",
-		"include/textures/Planets/jupiter.jpg",
-		"include/textures/Planets/saturn.png",
-		"include/textures/Planets/uranus.jpg",
-		"include/textures/Planets/neptune.jpg",
-		"include/textures/Planets/pluto.png",
-		"include/textures/Planets/eris.jpg"};
-	int arraySize = sizeof(textureStrings)/sizeof(textureStrings[0]);
-	for(int i = 0; i < arraySize; i++)
-	{
-		planetTexArray[i] = loadTexture(textureStrings[i]);
-	}
-	return planetTexArray;
-}
-
-int *loadPlanetNormals(int planetTexArray[])
-{
-	char *textureStrings[] = {"include/textures/Planets/mercuryNormal.png", 
-		"include/textures/Planets/venusNormal.png", 
-		"include/textures/Planets/earthNormal.jpg",
-		"include/textures/Planets/marsNormal.png",
-		"include/textures/Planets/ceresNormal.png",
-		"include/textures/Planets/jupiterNormal.png",
-		"include/textures/Planets/saturnNormal.png",
-		"include/textures/Planets/uranusNormal.png",
-		"include/textures/Planets/neptuneNormal.png",
-		"include/textures/Planets/plutoNormal.png",
-		"include/textures/Planets/erisNormal.png"};
-	int arraySize = sizeof(textureStrings)/sizeof(textureStrings[0]);
-	for(int i = 0; i < arraySize; i++)
-	{
-		planetTexArray[i] = loadTexture(textureStrings[i]);
-	}
-	return planetTexArray;
-}
-
-int *loadPlanetDisplacementMap(int planetTexArray[])
-{
-	char *textureStrings[] = {"include/textures/planets/mercuryDisplacement.png", 
-		"include/textures/planets/venusDisplacement.png", 
-		"include/textures/planets/earthDisplacement.png",
-		"include/textures/planets/marsDisplacement.png",
-		"include/textures/planets/ceresDisplacement.png",
-		"include/textures/planets/jupiterDisplacement.png",
-		"include/textures/planets/jupiterDisplacement.png",
-		"include/textures/planets/jupiterDisplacement.png",
-		"include/textures/planets/neptuneDisplacement.png",
-		"include/textures/planets/jupiterDisplacement.png",
-		"include/textures/planets/jupiterDisplacement.png"};
-	int arraySize = sizeof(textureStrings)/sizeof(textureStrings[0]);
-	for(int i = 0; i < arraySize; i++)
-	{
-		planetTexArray[i] = loadTexture(textureStrings[i]);
-	}
-	return planetTexArray;
-}
-
-int *loadMoonTextures(int planetTexArray[])
-{
-	char *textureStrings[] = {
-		"include/textures/moons/earth/moon.jpg",
-		"include/textures/moons/mars/phobos.jpg",
-		"include/textures/moons/mars/deimos.jpg",
-		"include/textures/moons/jupiter/callisto.jpg",
-		"include/textures/moons/jupiter/europa.jpg",
-		"include/textures/moons/jupiter/ganymede.jpg",
-		"include/textures/moons/jupiter/io.jpg",
-		"include/textures/moons/saturn/dione.jpg",
-		"include/textures/moons/saturn/enceladus.jpg",
-		"include/textures/moons/saturn/iapetus.jpg",
-		"include/textures/moons/saturn/mimas.jpg",
-		"include/textures/moons/saturn/rhea.jpg",
-		"include/textures/moons/saturn/tethys.jpg",
-		"include/textures/moons/saturn/titan.png",
-		"include/textures/moons/uranus/ariel.jpg",
-		"include/textures/moons/uranus/miranda.jpg",
-		"include/textures/moons/uranus/oberon.jpg",
-		"include/textures/moons/uranus/titania.jpg",
-		"include/textures/moons/uranus/umbriel.jpg",
-		"include/textures/moons/neptune/triton.jpg",
-		"include/textures/moons/pluto/charon.jpg"};
-	int arraySize = sizeof(textureStrings)/sizeof(textureStrings[0]);
-	for(int i = 0; i < arraySize; i++)
-	{
-		planetTexArray[i] = loadTexture(textureStrings[i]);
-	}
-	return planetTexArray;
-}
-
-void planetBuilder()
-{
-	planetParameters mercury, venus, earth, mars, eris, jupiter, saturn, uranus, neptune, pluto, ceres;
-	int numTextures = 11;
-	int planetTexArray[numTextures];
-	*planetTexArray = *loadPlanetTextures(planetTexArray);
-	
-	int planetNormArray[numTextures];
-	*planetNormArray = *loadPlanetNormals(planetNormArray);	
-	
-	int planetDisplacementArray[numTextures];
-	*planetDisplacementArray = *loadPlanetDisplacementMap(planetDisplacementArray);
-	
-	mercury.radius = 0.4*planetRadMult; mercury.size = 0.38*planetScaleMult; mercury.orbit = 0.240846; mercury.axialTilt = 0.034; mercury.day = 58.646; mercury.createAtmosphere = 0; mercury.createRing = 0; mercury.numMoons = 0;
-	mercury.texture = planetTexArray[0]; mercury.normal = planetNormArray[0]; mercury.displacement = planetDisplacementArray[0];
-	venus.radius = 0.7*planetRadMult; venus.size = 0.9499*planetScaleMult; venus.orbit = 0.615198; venus.axialTilt = 177.36; venus.day = 243.025; venus.createAtmosphere = 1; venus.createRing = 0; mercury.numMoons = 0;
-	venus.texture = planetTexArray[1]; venus.normal = planetNormArray[1]; venus.displacement = planetDisplacementArray[1];
-	earth.radius = 1.0*planetRadMult; earth.size = 1.0*planetScaleMult; earth.orbit = 1.0; earth.axialTilt = 23.4392811; earth.day = 1; earth.createAtmosphere = 1; earth.createRing = 0; earth.numMoons = 1;
-	earth.texture = planetTexArray[2]; earth.normal = planetNormArray[2]; earth.displacement = planetDisplacementArray[2];
-	mars.radius = 1.5*planetRadMult; mars.size = 0.533*planetScaleMult; mars.orbit = 1.88; mars.axialTilt = 25.19; mars.day = 1.025957; mars.createAtmosphere = 1; mars.createRing = 0; mars.numMoons = 2;
-	mars.texture = planetTexArray[3]; mars.normal = planetNormArray[3]; mars.displacement = planetDisplacementArray[3];
-	ceres.radius = 2.77*planetRadMult; ceres.size = 0.07*planetScaleMult; ceres.orbit = 4.6; ceres.axialTilt = 4; ceres.day = 0.3781; ceres.createAtmosphere = 1; ceres.createRing = 0; ceres.numMoons = 0;
-	ceres.texture = planetTexArray[4]; ceres.normal = planetNormArray[4]; ceres.displacement = planetDisplacementArray[4];
-	jupiter.radius = 5.2*planetRadMult; jupiter.size = 11.209*planetScaleMult; jupiter.orbit = 11.8618; jupiter.axialTilt = 3.13; jupiter.day = 0.413; jupiter.createAtmosphere = 0; jupiter.createRing = 0; jupiter.numMoons = 4;
-	jupiter.texture = planetTexArray[5]; jupiter.normal = planetNormArray[5]; jupiter.displacement = planetDisplacementArray[5];
-	saturn.radius = 9.5*planetRadMult; saturn.size = 9.45*planetScaleMult; saturn.orbit = 29.4571; saturn.axialTilt = 26.73; saturn.day = 0.439583; saturn.createAtmosphere = 0; saturn.createRing = 1; saturn.numMoons = 7;
-	saturn.texture = planetTexArray[6]; saturn.normal = planetNormArray[6]; saturn.displacement = planetDisplacementArray[6];
-	uranus.radius = 19.2*planetRadMult; uranus.size = 4.007*planetScaleMult; uranus.orbit = 84.0205; uranus.axialTilt = 97.77; uranus.day = 0.71833; uranus.createAtmosphere = 0; uranus.createRing = 1; uranus.numMoons = 5;
-	uranus.texture = planetTexArray[7]; uranus.normal = planetNormArray[7]; uranus.displacement = planetDisplacementArray[7];
-	neptune.radius = 30.1*planetRadMult; neptune.size = 3.883*planetScaleMult; neptune.orbit = 164.8; neptune.axialTilt = 28.32; neptune.day = 0.6713; neptune.createAtmosphere = 0; neptune.createRing = 0; neptune.numMoons = 1;
-	neptune.texture = planetTexArray[8]; neptune.normal = planetNormArray[8]; neptune.displacement = planetDisplacementArray[8];
-	pluto.radius = 39*planetRadMult; pluto.size = 0.18*planetScaleMult; pluto.orbit = 248; pluto.axialTilt = 119.591; pluto.day = 6.387230; pluto.createAtmosphere = 1; pluto.createRing = 0; pluto.numMoons = 1;
-	pluto.texture = planetTexArray[9]; pluto.normal = planetNormArray[9]; pluto.displacement = planetDisplacementArray[9];
-	eris.radius = 68*planetRadMult; eris.size = 0.182*planetScaleMult; eris.orbit = 558.04; eris.axialTilt = 61.45; eris.day = 1.079167 ; eris.createAtmosphere = 0; eris.createRing = 0; eris.numMoons = 0;
-	eris.texture = planetTexArray[10]; eris.normal = planetNormArray[10]; eris.displacement = planetDisplacementArray[10];
-	
-	planetInstanceArray[0] = mercury;
-	planetInstanceArray[1] = venus;
-	planetInstanceArray[2] = earth;
-	planetInstanceArray[3] = mars;
-	planetInstanceArray[4] = ceres;
-	planetInstanceArray[5] = jupiter;
-	planetInstanceArray[6] = saturn;
-	planetInstanceArray[7] = uranus;
-	planetInstanceArray[8] = neptune;
-	planetInstanceArray[9] = pluto;
-	planetInstanceArray[10] = eris;
-
-}
-
-void atmosphereBuilder() {
-	atmosphereParameters mercury, venus, earth, mars, eris, jupiter, saturn, uranus, neptune, pluto, ceres;
-	mercury.scaleFactor = 1.000;mercury.E = 14.3; 	mercury.C_R.x = 0.3; 	mercury.C_R.y = 0.7; 	mercury.C_R.z = 1.0;
-	venus.scaleFactor = 1.0308; venus.E = 15.3; 	venus.C_R.x = 0.7; 	venus.C_R.y = 0.3; 	venus.C_R.z = 0.0;
-	earth.scaleFactor = 1.0212; earth.E = 14.3; 	earth.C_R.x = 0.3; 	earth.C_R.y = 0.7; 	earth.C_R.z = 1.0;
-	mars.scaleFactor = 1.0210; 	mars.E = 10.3; 		mars.C_R.x = 0.9; 	mars.C_R.y = 0.3; 	mars.C_R.z = 0.1;
-	eris.scaleFactor = 1.001; 	eris.E = 14.3; 		eris.C_R.x = 0.3; 	eris.C_R.y = 0.7; 	eris.C_R.z = 1.0;
-	jupiter.scaleFactor = 1.1448;jupiter.E = 14.3; 	jupiter.C_R.x = 0.3; 	jupiter.C_R.y = 0.7; 	jupiter.C_R.z = 1.0;
-	saturn.scaleFactor = 0.0; 	saturn.E = 14.3; 	saturn.C_R.x = 0.3; 	saturn.C_R.y = 0.7; 	saturn.C_R.z = 1.0;
-	uranus.scaleFactor = 0.0; 	uranus.E = 14.3; 	uranus.C_R.x = 0.3; 	uranus.C_R.y = 0.7; 	uranus.C_R.z = 1.0;
-	neptune.scaleFactor = 0.0; 	neptune.E = 14.3; 	neptune.C_R.x = 0.3; 	neptune.C_R.y = 0.7; 	neptune.C_R.z = 1.0;
-	pluto.scaleFactor = 3.5000; pluto.E = 14.3; 	pluto.C_R.x = 0.3; 	pluto.C_R.y = 0.7; 	pluto.C_R.z = 1.0;
-	ceres.scaleFactor = 0.0; 	ceres.E = 14.3;		ceres.C_R.x = 0.3; 	ceres.C_R.y = 0.7; 	ceres.C_R.z = 1.0;
-	
-	atmosphereArray[0] = mercury;
-	atmosphereArray[1] = venus;
-	atmosphereArray[2] = earth;
-	atmosphereArray[3] = mars;
-	atmosphereArray[4] = ceres;
-	atmosphereArray[5] = jupiter;
-	atmosphereArray[6] = saturn;
-	atmosphereArray[7] = uranus;
-	atmosphereArray[8] = neptune;
-	atmosphereArray[9] = pluto;
-	atmosphereArray[10] = eris;
-	
-}
-
-void moonBuilder()
-{
-	moonParameters moon, deimos, phobos, callisto, europa, ganymede, io, dione, enceladus, iapetus, mimas, rhea, tethys, titan,
-		ariel, miranda, oberon, titania, umbriel, triton, charon;
-	int texArray[21];
-	*texArray = *loadMoonTextures(texArray);
-		
-	moon.planet = 2; moon.radius = 1.0*moonRadMult; moon.size = 0.272704*planetScaleMult; moon.orbit = 0.083; moon.day = 0.0; moon.texture = texArray[0];
-	phobos.planet = 3; phobos.radius = 0.015609*moonRadMult; phobos.size = 0.001413*planetScaleMult; phobos.orbit = 0.063014; phobos.day = 0.0; phobos.texture = texArray[1];
-	deimos.planet = 3; deimos.radius = 0.037919*moonRadMult; deimos.size = 0.000306*planetScaleMult; deimos.orbit = 0.003425; deimos.day = 0.0; deimos.texture = texArray[2];
-	callisto.planet = 5; callisto.radius = 4.883117*moonRadMult; callisto.size = 0.376707*planetScaleMult; callisto.orbit = 0.046575; callisto.day = 0.0; callisto.texture = texArray[3];
-	europa.planet = 5; europa.radius = 1.742597*moonRadMult; europa.size = 0.24329*planetScaleMult; europa.orbit = 0.009703; europa.day = 0.0; europa.texture = texArray[4];
-	ganymede.planet = 5; ganymede.radius = 2.779221*moonRadMult; ganymede.size = 0.206498*planetScaleMult; ganymede.orbit = 0.292123 ; ganymede.day = 0.0; ganymede.texture = texArray[5];
-	io.planet = 5; io.radius = 0.680519*moonRadMult; io.size = 0.142936*planetScaleMult; io.orbit = 0.004849; io.day = 0.0; io.texture = texArray[6];
-	
-	dione.planet = 6; dione.radius = 0.98026*moonRadMult; dione.size = 0.088134*planetScaleMult; dione.orbit = 0.006849 ; dione.day = 0.0; dione.texture = texArray[7];
-	enceladus.planet = 6; enceladus.radius = 0.384179*moonRadMult; enceladus.size = 0.024643*planetScaleMult; enceladus.orbit = 0.003753; enceladus.day = 0.0; enceladus.texture = texArray[8];
-	iapetus.planet = 6; iapetus.radius = 35.224156*moonRadMult; iapetus.size = 0.115461*planetScaleMult; iapetus.orbit = 0.216438; iapetus.day = 0.0; iapetus.texture = texArray[9];
-	mimas.planet = 6; mimas.radius = 0.481919*moonRadMult; mimas.size = 0.010909*planetScaleMult; mimas.orbit = 0.002581; mimas.day = 0.0; mimas.texture = texArray[10];
-	rhea.planet = 6; rhea.radius = 1.368935*moonRadMult; rhea.size = 0.119918*planetScaleMult; rhea.orbit = 0.012329; rhea.day = 0.0; rhea.texture = texArray[11];
-	tethys.planet = 6; tethys.radius = 0.766234*moonRadMult; tethys.size = 0.04183*planetScaleMult; tethys.orbit = 0.005171; tethys.day = 0.0; tethys.texture = texArray[12];
-	titan.planet = 6; titan.radius = 3.173688*moonRadMult; titan.size = 0.404175*planetScaleMult; titan.orbit = 0.043607; titan.day = 0.0; titan.texture = texArray[13];
-	
-	ariel.planet = 7; ariel.radius = 0.495844*moonRadMult; ariel.size = 0.0908*planetScaleMult; ariel.orbit = 0.006545; ariel.day = 0.0; ariel.texture = texArray[14];
-	miranda.planet = 7; miranda.radius = 0.336078*moonRadMult; miranda.size = 0.036886*planetScaleMult; miranda.orbit = 0.003836; miranda.day = 0.0; miranda.texture = texArray[15];
-	oberon.planet = 7; oberon.radius = 1.513247*moonRadMult; oberon.size = 0.1194*planetScaleMult; oberon.orbit = 0.036886; oberon.day = 0.0; oberon.texture = texArray[16];
-	titania.planet = 7; titania.radius = 1.132234*moonRadMult; titania.size = 0.1235*planetScaleMult; titania.orbit = 0.023836; titania.day = 0.0; titania.texture = texArray[17];
-	umbriel.planet = 7; umbriel.radius = 0.429151*moonRadMult; umbriel.size = 0.091822*planetScaleMult; umbriel.orbit = 0.011342; umbriel.day = 0.0; umbriel.texture = texArray[18];
-	triton.planet = 8; triton.radius = 0.921452*moonRadMult; triton.size = 0.2122*planetScaleMult; triton.orbit = -0.016101; triton.day = 0.0; triton.texture = texArray[19];
-	charon.planet = 9; charon.radius = 0.045548*moonRadMult; charon.size = 0.095*planetScaleMult; charon.orbit = 0.017479; charon.day = 0.0; charon.texture = texArray[20];
-	
-	moonInstanceArray[0] = moon;
-	moonInstanceArray[1] = phobos;
-	moonInstanceArray[2] = deimos;
-	moonInstanceArray[3] = callisto;
-	moonInstanceArray[4] = europa;
-	moonInstanceArray[5] = ganymede;
-	moonInstanceArray[6] = io;
-	moonInstanceArray[7] = dione;
-	moonInstanceArray[8] = enceladus;
-	moonInstanceArray[9] = iapetus;
-	moonInstanceArray[10] = mimas;
-	moonInstanceArray[11] = rhea;
-	moonInstanceArray[12] = tethys;
-	moonInstanceArray[13] = titan;
-	moonInstanceArray[14] = ariel;
-	moonInstanceArray[15] = miranda;
-	moonInstanceArray[16] = oberon;
-	moonInstanceArray[17] = titania;
-	moonInstanceArray[18] = umbriel;
-	moonInstanceArray[19] = triton;
-	moonInstanceArray[20] = charon;
-}
-
-vec3 *generateTangents(int vertexNumber, vec3 *points, vec3 *tangent)
-{	
-	vec3 edge1, edge2, deltaUV1, deltaUV2;
-	
-	for(int i = 0; i < vertexNumber; i+=3)
-	{
-		edge1.x = points[i+1].x - points[i].x;
-		edge1.y = points[i+1].y - points[i].y;
-		edge1.z = points[i+1].z - points[i].z;
-		edge2.x = points[i+2].x - points[i].x;
-		edge2.y = points[i+2].y - points[i].y;
-		edge2.z = points[i+2].z - points[i].z;
-		
-		deltaUV1.x = points[i+1].x - points[i].x;
-		deltaUV1.y = points[i+1].y - points[i].y;
-		deltaUV2.x = points[i+2].x - points[i].x;
-		deltaUV2.y = points[i+2].y - points[i].y;
-		
-		float f = 1.0 / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
-		tangent[i].x = f  * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
-		tangent[i].y = f  * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
-		tangent[i].z = f  * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
-		tangent[i] = normalizevec3(tangent[i]);
-		for(int j = i; j < i+3; j++)
-			tangent[j] = tangent[i];
-	}	
-	return tangent;	
-}
-
-vec3 *generateSmoothNormals(int vertexNumber, vec3 *vna, vec3 *pointArray, vec3 *normalArray)
-{
-	vec3 vn;
-	
-	for(int i = 0; i < vertexNumber; i++)
-	{
-		vec3 tempvn = {0.0, 0.0, 0.0};
-		vn = pointArray[i];
-		for(int j = 0; j < vertexNumber; j++)
-		{
-			if(vn.x == pointArray[j].x && vn.y == pointArray[j].y && vn.z == pointArray[j].z)
-			{
-				tempvn = plusequalvec3(tempvn, normalArray[j]);
-			}
-		}
-		vna[i] = normalizevec3(tempvn);
-	}
-	return vna;
-}
 
 /*void *generateTexCoords()
 {
@@ -392,7 +75,7 @@ void initObject() {
 	glBindVertexArray(0);
 }
 
-void initPlanet() {
+GLuint initPlanet() {
 	GLuint vPosition, vNormal, vTangent;
 	GLuint planetVBO;
 
@@ -426,6 +109,8 @@ void initPlanet() {
     glVertexAttribPointer(vTangent, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(planet.size+planet.nsize));
     
 	glBindVertexArray(0);
+	
+	return planetVAO;
 		
 }
 
@@ -462,12 +147,12 @@ GLuint initPlanetRing() {
 }
 
 
-void initAtmosphere() {
+GLuint initAtmosphere() {
 	createShader(&atmosphereShader, "src/shaders/atmosphere.vert",
 		"src/shaders/atmosphere.frag");
 	
 	GLuint vPosition, vNormal;
-	GLuint atmosphereVBO;
+	GLuint atmosphereVBO, atmosphereVAO;
     
     glGenVertexArrays(1, &atmosphereVAO);
 	glBindVertexArray(atmosphereVAO);
@@ -484,6 +169,8 @@ void initAtmosphere() {
     glEnableVertexAttribArray(vNormal);
     glVertexAttribPointer(vNormal, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(planet.size));
 	glBindVertexArray(0);
+	
+	return atmosphereVAO;
 }
 
 void initSkybox() {
@@ -572,8 +259,8 @@ void initFramebuffer() {
 
 void init()
 {
-	planetRing = createRing(1, 150.0, 200.0);
-	planet = tetrahedron(5);
+	planetRing = createRing(1, 21.0*50.0, 50.0*12.0);
+	planet = tetrahedron(5, &planet);
 	//atmosphere = tetrahedron(5);
 	//sun = tetrahedron(3);
 	//atmosphere = tetrahedron(5);
@@ -618,7 +305,7 @@ void initMVP(int shader, mat4 m, mat4 v)
 {
 	glUniformMatrix4fv(glGetUniformLocation( shader, "projection" ), 1, GL_FALSE, &p.m[0][0]);
 	glUniformMatrix4fv( glGetUniformLocation( shader, "model" ), 1, GL_FALSE, &m.m[0][0] );
-	//v = multiplymat4(getViewRotation(), planetInstanceArray[i].planetLocation);
+	//v = multiplymat4(getViewRotation(), planetInstance[i].planetLocation);
 	glUniformMatrix4fv( glGetUniformLocation( shader, "view" ), 1, GL_FALSE, &v.m[0][0] );
 }
 
@@ -693,7 +380,7 @@ void drawSun()
     glUniform1f(glGetUniformLocation(sunShader, "exposure"), 1.0);
 }
 
-void drawAtmosphere()
+void drawAtmosphere(GLuint atmoVAO, atmosphereParameters *atmosphereArray, planetParameters *planetInstance)
 {
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_ONE, GL_ONE);
@@ -704,17 +391,17 @@ void drawAtmosphere()
 	
 	for(int i = 0; i < 11; i++)
     {	
-    	if(planetInstanceArray[i].createAtmosphere) {
+    	if(planetInstance[i].createAtmosphere) {
 			float scaleFactor = atmosphereArray[i].scaleFactor;
-			float fOuter = planetInstanceArray[i].size*scaleFactor;
-			float fInner = (planetInstanceArray[i].size);
+			float fOuter = planetInstance[i].size*scaleFactor;
+			float fInner = (planetInstance[i].size);
 		
-			mat4 modelmat = planetInstanceArray[i].planetLocation;
+			mat4 modelmat = planetInstance[i].planetLocation;
 			mat4 tv = transposemat4(multiplymat4(modelmat, getViewPosition()));
 			vec4 camMult = {-tv.m[3][0], -tv.m[3][1], -tv.m[3][2], -tv.m[3][3]};
 			vec4 camPosition = multiplymat4vec4(tv, camMult);
 		
-			mat4 m = multiplymat4(modelmat, scale(planetInstanceArray[i].size*scaleFactor));
+			mat4 m = multiplymat4(modelmat, scale(planetInstance[i].size*scaleFactor));
 			vec3 C_R = atmosphereArray[i].C_R;//{0.3, 0.7, 1.0};
 			float E = atmosphereArray[i].E;//14.3;
 		
@@ -727,7 +414,7 @@ void drawAtmosphere()
 
 			initMVP(atmosphereShader, m, v);
 		
-			glBindVertexArray (atmosphereVAO);
+			glBindVertexArray (atmoVAO);
 			glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber);
 			glBindVertexArray(0);
 		}
@@ -735,23 +422,54 @@ void drawAtmosphere()
     glDisable(GL_BLEND);
 }
 
-void drawPlanet(float theta, GLuint vao)
-{   		
-	//drawAtmosphere(translation, planetInstanceArray[2].size, 1.025);
+void drawMoon(float theta, GLuint moonVAO, moonParameters *moonArray, planetParameters *planetInstance)
+{
+	glUseProgram(planetShader);
+	setupLighting(planetShader);
+	int c = 0;
+	for(int i = 0; i < 11; i++)
+	{
+		for(int j = 0; j < planetInstance[i].numMoons; j++) {
+			
 	
+			translation.x = (moonArray[c].radius+planetInstance[i].size) * cos(theta/moonArray[c].orbit);
+			translation.y = 0.0;
+			translation.z = (moonArray[c].radius+planetInstance[i].size) * sin(theta/moonArray[c].orbit);
+	
+			mat4 m = multiplymat4(multiplymat4(multiplymat4(planetInstance[i].planetLocation,translatevec3(translation)), scale(moonArray[c].size)),rotateX(90.0));
+	
+			initMVP(planetShader, m, v);
+	
+			glBindVertexArray (moonVAO);
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, moonArray[c].texture);
+			glActiveTexture(GL_TEXTURE1);
+			glBindTexture(GL_TEXTURE_2D, planetInstance[2].normal);
+			glUniform1i(glGetUniformLocation(planetShader, "tex"), 0);
+			glUniform1i(glGetUniformLocation(planetShader, "normalTex"), 1);
+			glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber );
+			glBindVertexArray(0);
+			c++;
+		}
+    }
+}
+
+
+planetParameters *drawPlanet(float theta, GLuint vao, planetParameters *planetInstance)
+{   		
 	glUseProgram(planetShader);
 	setupLighting(planetShader);
 	for(int i = 0; i < 11; i++)
 	{	
-		translation.x = planetInstanceArray[i].radius * cos(theta/planetInstanceArray[i].orbit);
+		translation.x = planetInstance[i].radius * cos(theta/planetInstance[i].orbit);
 		translation.y = 0.0;
-		translation.z = planetInstanceArray[i].radius * sin(theta/planetInstanceArray[i].orbit);
-		mat4 matT = multiplymat4(translatevec3(translation), scale(planetInstanceArray[i].size));
-		mat4 matR = multiplymat4(rotateY(theta/planetInstanceArray[i].day), rotateX(planetInstanceArray[i].axialTilt+45.0));
+		translation.z = planetInstance[i].radius * sin(theta/planetInstance[i].orbit);
+		mat4 matT = multiplymat4(translatevec3(translation), scale(planetInstance[i].size));
+		mat4 matR = multiplymat4(rotateY(theta/planetInstance[i].day), rotateX(planetInstance[i].axialTilt+45.0));
 		mat4 m = multiplymat4(matT,matR);
-		planetInstanceArray[i].planetLocation = translatevec3(translation);
+		planetInstance[i].planetLocation = translatevec3(translation);
 		
-		mat4 modelmat = planetInstanceArray[i].planetLocation;
+		mat4 modelmat = planetInstance[i].planetLocation;
 		mat4 tv = transposemat4(multiplymat4(modelmat, getViewPosition()));
 		vec4 camMult = {-tv.m[3][0], -tv.m[3][1], -tv.m[3][2], -tv.m[3][3]};
 		vec4 camPosition = multiplymat4vec4(tv, camMult);
@@ -759,9 +477,9 @@ void drawPlanet(float theta, GLuint vao)
 		initMVP(planetShader, m, v);
     	
     	glBindVertexArray (vao);
-    	bindTexture(GL_TEXTURE0, planetInstanceArray[i].texture);
-    	bindTexture(GL_TEXTURE1, planetInstanceArray[i].normal);
-    	bindTexture(GL_TEXTURE2, planetInstanceArray[i].displacement);
+    	bindTexture(GL_TEXTURE0, planetInstance[i].texture);
+    	bindTexture(GL_TEXTURE1, planetInstance[i].normal);
+    	bindTexture(GL_TEXTURE2, planetInstance[i].displacement);
     	glUniform1i(glGetUniformLocation(planetShader, "tex"), 0);
     	glUniform1i(glGetUniformLocation(planetShader, "normalTex"), 1);
     	glUniform1i(glGetUniformLocation(planetShader, "depthMap"), 2);
@@ -769,69 +487,40 @@ void drawPlanet(float theta, GLuint vao)
     	glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber);
     	glBindVertexArray(0);
     }
+    
+    return planetInstance;
 }
 
-void drawPlanetRing(GLuint vao) 
+void drawPlanetRing(GLuint vao, ringParameters *ringArray, planetParameters *planetInstance) 
 {   
 	glUseProgram(ringShader);
 	setupLighting(ringShader);
+	
+	int c = 0;
 	
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	
 	for(int i = 0; i < 11; i++)
 	{	
-		if(planetInstanceArray[i].createRing) {
+		if(planetInstance[i].createRing) {
 			glDisable(GL_CULL_FACE);
-			mat4 modelmat = planetInstanceArray[i].planetLocation;
-			mat4 m = multiplymat4(multiplymat4(modelmat, rotateX(planetInstanceArray[i].axialTilt+45.0)),scale(5.0));
+			mat4 modelmat = planetInstance[i].planetLocation;
+			mat4 m = multiplymat4(multiplymat4(modelmat, rotateX(planetInstance[i].axialTilt+45.0)),scale(1.0));
 
 			initMVP(ringShader, m, v);
 	
 			glBindVertexArray (vao);
-			bindTexture(GL_TEXTURE0, ringTexture);
+			bindTexture(GL_TEXTURE0, ringArray[c].texture);
 			glUniform1i(glGetUniformLocation(ringShader, "tex"), 0);
 			glDrawArrays( GL_TRIANGLES, 0, planetRing.vertexNumber);
 			glBindVertexArray(0);
 			glEnable(GL_CULL_FACE);
-			
+			c++;
 			
 		}
 	}
 	glDisable(GL_BLEND);
-}
-
-void drawMoon(float theta)
-{
-	glUseProgram(planetShader);
-	setupLighting(planetShader);
-	int c = 0;
-	for(int i = 0; i < 11; i++)
-	{
-		for(int j = 0; j < planetInstanceArray[i].numMoons; j++) {
-			
-	
-			translation.x = (moonInstanceArray[c].radius+planetInstanceArray[i].size) * cos(theta/moonInstanceArray[c].orbit);
-			translation.y = 0.0;
-			translation.z = (moonInstanceArray[c].radius+planetInstanceArray[i].size) * sin(theta/moonInstanceArray[c].orbit);
-	
-			mat4 m = multiplymat4(multiplymat4(multiplymat4(planetInstanceArray[i].planetLocation,translatevec3(translation)), scale(moonInstanceArray[c].size)),rotateX(90.0));
-	
-			initMVP(planetShader, m, v);
-	
-			glBindVertexArray (planetVAO);
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, moonInstanceArray[c].texture);
-			glActiveTexture(GL_TEXTURE1);
-			glBindTexture(GL_TEXTURE_2D, planetInstanceArray[2].normal);
-			glUniform1i(glGetUniformLocation(planetShader, "tex"), 0);
-			glUniform1i(glGetUniformLocation(planetShader, "normalTex"), 1);
-			glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber );
-			glBindVertexArray(0);
-			c++;
-			//printf("c: %f i: %d, j: %d\n", moonInstanceArray[c].radius, i, j);
-		}
-    }
 }
 
 void doMovement()
@@ -917,15 +606,22 @@ int main(int argc, char *argv[])
 	
 	sunTexture = loadTexture("include/textures/Planets/sun2.jpg");
 	sunNormal = loadTexture("include/textures/Planets/sunNormal.png");
-	ringTexture = loadSpriteTexture("include/textures/Planets/saturnRing.png");
-	planetBuilder();
-	moonBuilder();
-	atmosphereBuilder();
+	
+	planetParameters planetArray[11];
+	moonParameters moonArray[21];
+	atmosphereParameters atmosphereArray[11];
+	ringParameters ringArray[2];
+	
+	*planetArray = *planetBuilder(planetArray);
+	*moonArray = *moonBuilder(moonArray);
+	*atmosphereArray = *atmosphereBuilder(atmosphereArray);
+	*ringArray = *ringBuilder(ringArray);
+	
 	init();
-	initPlanet();
+	GLuint pVAO = initPlanet();
 	initSkybox();
 	initObject();
-	initAtmosphere();
+	GLuint atmoVAO = initAtmosphere();
 	initGui();
 	initButtons();
 	initPlanetUI();
@@ -937,9 +633,10 @@ int main(int argc, char *argv[])
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_MULTISAMPLE);
 	glCullFace(GL_BACK);
+	//glfwSwapInterval(0);
 	
-	float fpsFrames= 0;
-	float lastTime = 0;
+	float fpsFrames= 0.0;
+	float lastTime = 0.0;
 	while(!glfwWindowShouldClose(window))
 	{
 		GLfloat currentFrame = glfwGetTime();
@@ -950,8 +647,8 @@ int main(int argc, char *argv[])
         fpsFrames++;
 		if(currentFrame - lastTime >= 1.0)
 		{
-			//printf("%f\n", 1000/fpsFrames);
-			fpsFrames = 0;
+			//printf("%f\n", fpsFrames);
+			fpsFrames = 0.0;
 			lastTime += 1.0;
 		}
         
@@ -965,18 +662,20 @@ int main(int argc, char *argv[])
 
 		drawSkybox(skyboxTexture);
 		drawSun();
-		drawPlanet(theta, planetVAO);
-		drawPlanetRing(ringVAO);
-		drawAtmosphere();
+		*planetArray = *drawPlanet(theta, planetVAO, planetArray);
+		drawPlanetRing(ringVAO, ringArray, planetArray);
+		drawMoon(theta, planetVAO, moonArray, planetArray);
+    	drawAtmosphere(atmoVAO, atmosphereArray, planetArray);
 		drawObj();
-		drawMoon(theta);
 		
 		drawButton(button1);
-		//drawPlanetUI(glfwGetTime());
 		//drawPlanetButtons();
 		
 		if(stopRotation == 0){
 			theta += 0.0005;
+		}
+		if(drawGUI) {
+			drawPlanetUI(glfwGetTime());
 		}
 		
 		glfwSwapBuffers(window);
@@ -1037,17 +736,17 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 	mousePosY = ypos;
 }
 
-void checkButtonPress(imgButton b)
-{
+void checkButtonPress(imgButton b, float xMouse, float yMouse)
+{ 
 	if(mousePosX <= b.xPos && mousePosX >= b.xPos+b.size && mousePosY >= b.yPos && mousePosY <= b.yPos-b.size)
 	{
 		if(stopRotation == 0) {
 			stopRotation = 1;
-			buttonState(0);
+			//buttonState(0);
 		}
 		else {
 			stopRotation = 0;
-			buttonState(1);
+			//buttonState(1);
 		}
 	}
 }
@@ -1055,7 +754,7 @@ void checkButtonPress(imgButton b)
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
 	if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
 	{
-		checkButtonPress(button1);
+		checkButtonPress(button1, mousePosX, mousePosY);
 	}
 }
 

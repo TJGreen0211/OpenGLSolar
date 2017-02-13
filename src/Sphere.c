@@ -3,7 +3,7 @@
 sphere newSphere;
 
 int Index = 0;
-void triangle(vec3 a, vec3 b, vec3 c)
+void triangle(vec3 a, vec3 b, vec3 c, sphere *s)
 {
 	vec3 one, two;
 	one.x = b.x - a.x;
@@ -33,23 +33,23 @@ vec3 unitCircle(vec3 p)
 	return t;
 }
 
-void divideTriangle(vec3 a, vec3 b, vec3 c, int count)
+void divideTriangle(vec3 a, vec3 b, vec3 c, int count, sphere *s)
 {
 	if(count > 0) {
 		vec3 v1 = unitCircle(addvec3(a, b));
 		vec3 v2 = unitCircle(addvec3(a, c));
 		vec3 v3 = unitCircle(addvec3(b, c));
-		divideTriangle(  a, v1, v2, count - 1 );
-        divideTriangle(  c, v2, v3, count - 1 );
-        divideTriangle(  b, v3, v1, count - 1 );
-        divideTriangle( v1, v3, v2, count - 1 );
+		divideTriangle(  a, v1, v2, count - 1, s);
+        divideTriangle(  c, v2, v3, count - 1, s);
+        divideTriangle(  b, v3, v1, count - 1, s);
+        divideTriangle( v1, v3, v2, count - 1, s);
 	}
 	else {
-		triangle(a, b, c);
+		triangle(a, b, c, s);
 	}
 }
 
-sphere tetrahedron(int count)
+sphere tetrahedron(int count, sphere *s)
 {
 	int numTriangles = pow(4, count+1);
 	int numVertices = 3 * numTriangles;
@@ -67,10 +67,10 @@ sphere tetrahedron(int count)
 		{ 0.816497, -0.471405, -0.333333 }
     };
     
-    divideTriangle( v[0], v[1], v[2], count );
-    divideTriangle( v[3], v[2], v[1], count );
-    divideTriangle( v[0], v[3], v[1], count );
-    divideTriangle( v[0], v[2], v[3], count );
+    divideTriangle( v[0], v[1], v[2], count, s);
+    divideTriangle( v[3], v[2], v[1], count, s);
+    divideTriangle( v[0], v[3], v[1], count, s);
+    divideTriangle( v[0], v[2], v[3], count, s);
     
     newSphere.vertexNumber = numVertices;
     newSphere.size = mallocVertSize;
