@@ -15,20 +15,20 @@ uniform sampler2D tex;
 uniform sampler2D normalTex;
 uniform sampler2D depthMap;
 
-float height_scale = 0.001;
+float height_scale = 0.05;
 
-vec2 parallaxMapping(vec2 coords)
+vec2 parallaxMapping(vec2 coords, vec3 viewDir)
 {
 	float height = texture(depthMap, coords.xy).r;
-	vec2 p = fV.xy / fV.z * (height * height_scale);
-	return coords.xy - p;
+	return coords.xy - fV.xy / fV.z * (height * height_scale);
 }
 
 void main()
 {	
 	vec2 longlat = vec2((atan(TexCoords.y, TexCoords.x) / 3.1415926 + 1.0) * 0.5,
                                   (asin(TexCoords.z) / 3.1415926 + 0.5));
-    vec2 D = parallaxMapping(longlat);
+    vec3 viewDir = normalize(fV-fE);
+    vec2 D = parallaxMapping(longlat, viewDir);
     vec3 color = vec3(texture(tex, D));
     vec3 N = 2.0*vec3(texture(normalTex, D))-1.0;
     
@@ -47,4 +47,5 @@ void main()
     }
     
     FragColor = vec4(ambient + diffuse + specular, 1.0);
+	//FragColor = vec4(D, 0.0, 1.0);
 }

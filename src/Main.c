@@ -483,7 +483,7 @@ planetParameters *drawPlanet(float theta, GLuint vao, planetParameters *planetIn
     	glUniform1i(glGetUniformLocation(planetShader, "tex"), 0);
     	glUniform1i(glGetUniformLocation(planetShader, "normalTex"), 1);
     	glUniform1i(glGetUniformLocation(planetShader, "depthMap"), 2);
-    	glUniform3f(glGetUniformLocation(atmosphereShader, "camPosition"), camPosition.x, camPosition.y, camPosition.z);
+    	glUniform3f(glGetUniformLocation(planetShader, "camPosition"), camPosition.x, camPosition.y, camPosition.z);
     	glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber);
     	glBindVertexArray(0);
     }
@@ -651,6 +651,13 @@ int main(int argc, char *argv[])
 			fpsFrames = 0.0;
 			lastTime += 1.0;
 		}
+		//Todo:
+		//Check for atmosphere intersection
+		/*
+			The formula is:
+			A point (x,y,z) is inside the sphere with center (cx,cy,cz) and radius r if
+ 			( x-cx ) ^2 + (y-cy) ^2 + (z-cz) ^ 2 < r^2 
+		*/
         
 		glfwPollEvents();
 		doMovement();
@@ -700,19 +707,15 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     	
     if (key == GLFW_KEY_W && action == GLFW_PRESS){
     	keys = GLFW_KEY_W;
-    	doMovement();
     }
     if (key == GLFW_KEY_S && action == GLFW_PRESS){
     	keys = GLFW_KEY_S;
-    	doMovement();
     }
     if (key == GLFW_KEY_A && action == GLFW_PRESS){
     	keys = GLFW_KEY_A;
-    	doMovement();
     }
     if (key == GLFW_KEY_D && action == GLFW_PRESS){
     	keys = GLFW_KEY_D;
-    	doMovement();
     }
     if(action == GLFW_RELEASE)
     	keys = 0;

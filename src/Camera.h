@@ -9,6 +9,7 @@
 #include <OpenGL/gl3.h>
 #include <GLFW/glfw3.h>
 
+#include "Window.h"
 #include "LinearAlg.h"
 
 enum Camera_Movement {
@@ -23,11 +24,9 @@ mat4 getViewMatrix();
 mat4 getViewPosition();
 mat4 getViewRotation();
 
-vec3 getCameraPosition();
-
 void updateCameraVectors();
 void processKeyboard(enum Camera_Movement direction, GLfloat deltaTime , GLfloat deltaSpeed);
-void processMouseMovement(GLfloat xpos, GLfloat ypos);
-float processMouseScroll(GLfloat yoffset, float zoom);
+void processMouseMovement(float xpos, float ypos);
+float processMouseScroll(float yoffset, float zoom);
 
 #endif

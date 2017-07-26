@@ -47,10 +47,10 @@ void main()
 	v.z = dot(vertexPosition, N);
 	fE = normalize(v);
 	
-	vec3 ray = camPosition;//-vec3(vPosition*model);
-	v.x = dot(ray, T);
-	v.y = dot(ray, B);
-	v.z = dot(ray, N);
+	//vec3 ray = vec3(vPosition*model);
+	v.x = dot(camPosition, T);
+	v.y = dot(camPosition, B);
+	v.z = dot(camPosition, N);
 	fV = normalize(v);
 	
 	vertexPosition = normalize(vertexPosition);
