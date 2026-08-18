@@ -1,6 +1,12 @@
 #include "Main.h"
 #include <stdio.h>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <direct.h>
+#else
 #include <unistd.h>
+#endif
 
 typedef struct moonParameters {
 	float radius;
@@ -33,13 +39,16 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 GLuint loadShader(char *vertex_path, char *fragement_path);
+#ifdef _WIN32
+static void *gladGetProcAddress(const char *name);
+#endif
 
 int mousePosX, mousePosY;
 imgButton button1, mercuryButton, venusButton, earthButton, marsButton, 
 	jupiterButton, saturnButton, uranusButton, neptuneButton;
 	
 const float WIDTH = 1400, HEIGHT = 800;
-float ASPECT = WIDTH/HEIGHT;
+float ASPECT = 1400.0f/800.0f;
 
 sphere planet, sun, atmosphere;
 obj object;
@@ -155,13 +164,13 @@ void planetBuilder()
 {
 	planetParameters mercury, venus, earth, mars, eris, jupiter, saturn, uranus, neptune, pluto, ceres;
 	int numTextures = 11;
-	int planetTexArray[numTextures];
+	int planetTexArray[11];
 	*planetTexArray = *loadPlanetTextures(planetTexArray);
 	
-	int planetNormArray[numTextures];
+	int planetNormArray[11];
 	*planetNormArray = *loadPlanetNormals(planetNormArray);	
 	
-	int planetDisplacementArray[numTextures];
+	int planetDisplacementArray[11];
 	*planetDisplacementArray = *loadPlanetDisplacementMap(planetDisplacementArray);
 	
 	mercury.radius = 0.4*planetRadMult; mercury.size = 0.38*planetScaleMult; mercury.orbit = 0.240846; mercury.axialTilt = 0.034; mercury.day = 58.646; mercury.createAtmosphere = 0; 
@@ -318,19 +327,19 @@ void initPlanet() {
 	createShader(&planetShader, "src/shaders/planet.vert",
 		"src/shaders/planet.frag");
 	
-	vec3 tangent[planet.vertexNumber];
-	*tangent = *generateTangents(planet.vertexNumber, planet.points, tangent);
-	vec3 vna[planet.vertexNumber];
-	*vna = *generateSmoothNormals(planet.vertexNumber, vna, planet.points, planet.normals);
+	vec3 *tangent = malloc(sizeof(vec3) * planet.vertexNumber);
+	generateTangents(planet.vertexNumber, planet.points, tangent);
+	vec3 *vna = malloc(sizeof(vec3) * planet.vertexNumber);
+	generateSmoothNormals(planet.vertexNumber, vna, planet.points, planet.normals);
 		
 	glGenVertexArrays(1, &planetVAO);
 	glBindVertexArray(planetVAO);
 	glGenBuffers(1, &planetVBO);
 	glBindBuffer(GL_ARRAY_BUFFER, planetVBO);
-	glBufferData(GL_ARRAY_BUFFER, planet.size + planet.nsize + sizeof(tangent), NULL, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, planet.size + planet.nsize + sizeof(vec3) * planet.vertexNumber, NULL, GL_STATIC_DRAW);
 	glBufferSubData(GL_ARRAY_BUFFER, 0,	planet.size, planet.points);
 	glBufferSubData(GL_ARRAY_BUFFER, planet.size, planet.nsize, vna);	
-	glBufferSubData(GL_ARRAY_BUFFER, planet.size+planet.nsize, sizeof(tangent),	tangent);
+	glBufferSubData(GL_ARRAY_BUFFER, planet.size+planet.nsize, sizeof(vec3) * planet.vertexNumber,	tangent);
 	
 	vPosition = glGetAttribLocation(planetShader, "vPosition");
     glEnableVertexAttribArray(vPosition);
@@ -345,7 +354,9 @@ void initPlanet() {
     glVertexAttribPointer(vTangent, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(planet.size+planet.nsize));
     
 	glBindVertexArray(0);
-		
+
+	free(tangent);
+	free(vna);
 }
 
 void initAtmosphere() {
@@ -453,17 +464,24 @@ void initFramebuffer() {
 
 void init()
 {
+	fprintf(stderr, "[trace] init: tetrahedron\n");
 	planet = tetrahedron(5);
 	//atmosphere = tetrahedron(5);
 	createShader(&sunShader, "src/shaders/sun.vert",
 		"src/shaders/sun.frag");
-    
+	fprintf(stderr, "[trace] init: framebuffer\n");
+
     initFramebuffer();
+    fprintf(stderr, "[trace] init: initPlanet\n");
     initPlanet();
+	fprintf(stderr, "[trace] init: skybox\n");
 	initSkybox();
+	fprintf(stderr, "[trace] init: object\n");
 	initObject();
+	fprintf(stderr, "[trace] init: atmosphere\n");
 	initAtmosphere();
-	
+	fprintf(stderr, "[trace] init: done\n");
+
     glEnable(GL_DEPTH_TEST);
 }
 
@@ -675,6 +693,16 @@ void drawMoon()
     glBindVertexArray(0);
 }
 
+#ifdef _WIN32
+static void *gladGetProcAddress(const char *name)
+{
+	void *p = (void *)wglGetProcAddress(name);
+	if (!p)
+		p = (void *)GetProcAddress(GetModuleHandleA("opengl32.dll"), name);
+	return p;
+}
+#endif
+
 void doMovement()
 {
 	if(keys == GLFW_KEY_W && actionPress == GLFW_PRESS)
@@ -688,16 +716,57 @@ void doMovement()
 }
 
 GLFWwindow *setupGLFW() {
-	glfwInit();
+	fprintf(stderr, "[trace] glfw: init\n");
+	if (!glfwInit())
+	{
+		fprintf(stderr, "[trace] glfw: init FAILED\n");
+		glfwTerminate();
+		exit(1);
+	}
 	glfwWindowHint(GLFW_RESIZABLE, GL_TRUE);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
 	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	glfwWindowHint(GLFW_SAMPLES, 4);
-	
-	GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "SolarSystem", NULL, NULL);
+
+	fprintf(stderr, "[trace] glfw: creating window\n");
+	/* Bordered fullscreen: normal decorated window, maximized after
+	 * creation. Aspect is taken from the actual (maximized) size. */
+	int winW = (int)WIDTH, winH = (int)HEIGHT;
+	GLFWmonitor *monitor = glfwGetPrimaryMonitor();
+	const GLFWvidmode *mode = (monitor != NULL) ? glfwGetVideoMode(monitor) : NULL;
+	if (mode != NULL)
+	{
+		winW = mode->width;
+		winH = mode->height;
+	}
+	fprintf(stderr, "[trace] glfw: window %dx%d\n", winW, winH);
+	GLFWwindow* window = glfwCreateWindow(winW, winH, "SolarSystem", NULL, NULL);
+	if (!window)
+	{
+		fprintf(stderr, "[trace] glfw: window creation FAILED\n");
+		glfwTerminate();
+		exit(1);
+	}
+	glfwMaximizeWindow(window);
+	{
+		int ww, wh;
+		glfwGetWindowSize(window, &ww, &wh);
+		if (ww > 0 && wh > 0)
+			ASPECT = (float)ww / (float)wh;
+		fprintf(stderr, "[trace] glfw: maximized %dx%d, aspect %.3f\n", ww, wh, ASPECT);
+	}
 	glfwMakeContextCurrent(window);
+#ifndef __APPLE__
+	if (!gladLoadGL(gladGetProcAddress))
+	{
+		fprintf(stderr, "[trace] gl: gladLoadGL FAILED\n");
+		glfwTerminate();
+		exit(1);
+	}
+	fprintf(stderr, "[trace] gl: version = %s\n", (const char *)glGetString(GL_VERSION));
+#endif
 	//glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_ENABLED);
 	glfwSetKeyCallback(window, key_callback);
 	glfwSetCursorPosCallback(window, mouse_callback);
@@ -747,10 +816,41 @@ void drawPlanetButtons()
 
 int main(int argc, char *argv[])
 {
+	setvbuf(stderr, NULL, _IONBF, 0);
+	fprintf(stderr, "[trace] main: start\n");
+#ifdef __APPLE__
 	chdir("/Users/tjgreen/Documents/OpenGL/Sol");
-	
+#else
+	{
+		char exePath[MAX_PATH];
+		GetModuleFileNameA(NULL, exePath, MAX_PATH);
+		for (char *p = exePath + strlen(exePath) - 1; p > exePath; p--)
+		{
+			if (*p == '\\' || *p == '/')
+			{
+				*p = '\0';
+				break;
+			}
+		}
+		chdir(exePath);
+	}
+#endif
+	{
+		char cwd[MAX_PATH];
+#ifdef _WIN32
+		GetCurrentDirectoryA(sizeof(cwd), cwd);
+#else
+		getcwd(cwd, sizeof(cwd));
+#endif
+		fprintf(stderr, "[trace] main: cwd = %s\n", cwd);
+	}
+
+	fprintf(stderr, "[trace] main: creating window\n");
 	GLFWwindow *window = setupGLFW();
+	fprintf(stderr, "[trace] main: window ready\n");
+	fprintf(stderr, "[trace] main: loading skybox\n");
 	GLuint skyboxTexture = initCubemap();
+	fprintf(stderr, "[trace] main: skybox loaded\n");
 	
 	//GLFWwindow* window2 = glfwCreateWindow(500, 500, "SolarSystem", NULL, NULL);
 	//glfwMakeContextCurrent(window2);
@@ -762,15 +862,21 @@ int main(int argc, char *argv[])
   		printf(stderr, "Error: %s\n", glewGetErrorString(err));
 	}*/
 	
+	fprintf(stderr, "[trace] main: loading sun textures\n");
 	sunTexture = loadTexture("include/textures/Planets/sun2.jpg");
 	sunNormal = loadTexture("include/textures/Planets/sunNormal.png");
+	fprintf(stderr, "[trace] main: planetBuilder\n");
 	planetBuilder();
+	fprintf(stderr, "[trace] main: atmosphereBuilder\n");
 	atmosphereBuilder();
+	fprintf(stderr, "[trace] main: init\n");
 	init();
+	fprintf(stderr, "[trace] main: perspective\n");
 	createPerspectiveMatrix();
-	
+
 	initializePlanetButtons();
-	
+	fprintf(stderr, "[trace] main: enter render loop\n");
+
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_MULTISAMPLE);
 	glCullFace(GL_BACK);
@@ -799,7 +905,12 @@ int main(int argc, char *argv[])
 		glfwPollEvents();
 		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		glViewport(0, 0, WIDTH, HEIGHT);
+		{
+			int fbw, fbh;
+			glfwGetFramebufferSize(window, &fbw, &fbh);
+			if (fbw > 0 && fbh > 0)
+				glViewport(0, 0, fbw, fbh);
+		}
 
 		drawSkybox(skyboxTexture);
 		drawSun();

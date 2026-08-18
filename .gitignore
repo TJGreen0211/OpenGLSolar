@@ -1,0 +1,37 @@
+# --- Build output (Windows port) ---
+build/
+*.exe
+*.obj
+!include/obj/*.obj
+*.o
+/glfw3.dll
+
+# Legacy committed binary from the original macOS build
+/src/cube
+
+# Legacy macOS libraries + duplicate headers (unused by any current build)
+/lib/
+
+# Unused vendored FreeType 2.4.0 source distribution
+/include/freetype-2.4.0/
+
+# Vendor docs not needed for the build
+third_party/glfw/glfw-3.4.bin.WIN64/docs/
+
+# --- OS / editor junk ---
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+
+# --- IDE / tool state ---
+.vs/
+*.user
+*.aps
+*.opendb
+.kilo/
+
+# --- Misc ---
+*.log
+__pycache__/

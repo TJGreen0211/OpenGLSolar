@@ -52,8 +52,8 @@ obj ObjLoadModel(char *fname)
 	
 	rewind(fp);
 	
-	vec3 verts[vertCount];
-	vec3 faces[faceCount];
+	vec3 *verts = malloc(sizeof(vec3) * vertCount);
+	vec3 *faces = malloc(sizeof(vec3) * faceCount);
 	int breakCount= 0;
 	
 	while((ch = fgetc(fp)) != EOF)
@@ -90,8 +90,8 @@ obj ObjLoadModel(char *fname)
 	
 	fclose(fp);
 	
-	vec3 normals[vertCount*3];
-	vec3 points[vertCount*3];
+	vec3 *normals = malloc(sizeof(vec3) * vertCount*3);
+	vec3 *points = malloc(sizeof(vec3) * vertCount*3);
 	vec3 one, two;
 	int Index = 0;
 	int a, b, c;

@@ -5,8 +5,12 @@
 # define GL_DO_NOT_WARN_IF_MULTI_GL_VERSION_HEADERS_INCLUDED
 #endif
 
+#ifdef __APPLE__
 #include <OpenGL/OpenGL.h>
 #include <OpenGL/gl3.h>
+#else
+#include <glad/gl.h>
+#endif
 #include <GLFW/glfw3.h>
 //#include <GL/glew.h>
 #include "Common.h"
