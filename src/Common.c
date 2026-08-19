@@ -1,5 +1,6 @@
 #include "Common.h"
 #include "LoadShader.h"
+#include <stdio.h>
 
 //GLfloat deltaTime = 0.0f;
 //GLfloat lastFrame = 0.0f;
@@ -43,14 +44,23 @@ GLuint loadCubemap(char **faces)
 
 GLuint loadTexture(char const * path)
 {
-    //Generate texture ID and load texture data 
+    //Generate texture ID and load texture data
     GLuint textureID;
     glGenTextures(1, &textureID);
-    int width, height;
+    int width = 0, height = 0;
     unsigned char* image = SOIL_load_image(path, &width, &height, 0, SOIL_LOAD_RGB);
     // Assign texture to ID
     glBindTexture(GL_TEXTURE_2D, textureID);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, image);
+    if (image == NULL || width <= 0 || height <= 0)
+    {
+        // No file: upload a valid neutral texture (flat height) instead of
+        // calling glTexImage2D with garbage size/pointer.
+        static const unsigned char neutral[3] = { 0, 0, 0 };
+        fprintf(stderr, "[trace] loadTexture: FAILED '%s', using neutral 1x1 fallback\n", path);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1, 1, 0, GL_RGB, GL_UNSIGNED_BYTE, neutral);
+    }
+    else
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, image);
     glGenerateMipmap(GL_TEXTURE_2D);
 
     // Parameters

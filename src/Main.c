@@ -244,32 +244,24 @@ void moonBuilder()
 }
 
 vec3 *generateTangents(int vertexNumber, vec3 *points, vec3 *tangent)
-{	
-	vec3 edge1, edge2, deltaUV1, deltaUV2;
+{
+	vec3 axis = {0.0, 0.0, 1.0};
+	vec3 t;
 	
-	for(int i = 0; i < vertexNumber; i+=3)
+	// The fragment shader samples the texture with the equirectangular
+	// mapping u = atan2(y, x), v = asin(z), so the tangent is the
+	// direction of increasing u: cross(axis, point) = (-y, x, 0).
+	for(int i = 0; i < vertexNumber; i++)
 	{
-		edge1.x = points[i+1].x - points[i].x;
-		edge1.y = points[i+1].y - points[i].y;
-		edge1.z = points[i+1].z - points[i].z;
-		edge2.x = points[i+2].x - points[i].x;
-		edge2.y = points[i+2].y - points[i].y;
-		edge2.z = points[i+2].z - points[i].z;
-		
-		deltaUV1.x = points[i+1].x - points[i].x;
-		deltaUV1.y = points[i+1].y - points[i].y;
-		deltaUV2.x = points[i+2].x - points[i].x;
-		deltaUV2.y = points[i+2].y - points[i].y;
-		
-		float f = 1.0 / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
-		tangent[i].x = f  * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
-		tangent[i].y = f  * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
-		tangent[i].z = f  * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
-		tangent[i] = normalizevec3(tangent[i]);
-		for(int j = i; j < i+3; j++)
-			tangent[j] = tangent[i];
-	}	
-	return tangent;	
+		t = crossvec3(axis, points[i]);
+		if(t.x*t.x + t.y*t.y + t.z*t.z < 1e-8f)
+		{
+			// Exactly on a pole where the mapping degenerates.
+			t.x = 1.0; t.y = 0.0; t.z = 0.0;
+		}
+		tangent[i] = normalizevec3(t);
+	}
+	return tangent;
 }
 
 vec3 *generateSmoothNormals(int vertexNumber, vec3 *vna, vec3 *pointArray, vec3 *normalArray)
@@ -687,8 +679,11 @@ void drawMoon()
     glBindTexture(GL_TEXTURE_2D, planetInstanceArray[2].texture);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, planetInstanceArray[2].normal);
- 	glUniform1i(glGetUniformLocation(planetShader, "tex"), 0);
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, planetInstanceArray[2].displacement);
+  	glUniform1i(glGetUniformLocation(planetShader, "tex"), 0);
     glUniform1i(glGetUniformLocation(planetShader, "normalTex"), 1);
+    glUniform1i(glGetUniformLocation(planetShader, "depthMap"), 2);
     glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber );
     glBindVertexArray(0);
 }

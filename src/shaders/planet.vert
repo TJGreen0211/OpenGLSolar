@@ -16,10 +16,9 @@ uniform mat4 view;
 uniform mat4 projection;
 uniform mat4 translation;
 uniform vec4 lightPos;
-uniform vec3 camPosition;
 
 void main()
-{	
+{
 	gl_Position = vPosition*model*view*projection;
 	mat3 normalMatrix = transpose(inverse(mat3(model)));
 	vec3 T = normalize(vec3(vec4(vTangent, 0.0) * model));
@@ -27,8 +26,11 @@ void main()
 	T = normalize(T - dot(T, N) * N);
 	vec3 B = cross(N, T);
 	
-	vec3 lightDir = -normalize(vPosition*model - lightPos).xyz;
 	vec3 vertexPosition = (vPosition*model).xyz;
+	vec3 camPosition = (vec4(0.0, 0.0, 0.0, 1.0) * inverse(view)).xyz;
+	// camera -> fragment direction in world space
+	vec3 viewDir = normalize(vertexPosition - camPosition);
+	vec3 lightDir = normalize(lightPos.xyz - vertexPosition);
 	
 	fL = vPosition.xyz;
 	vec3 v;
@@ -36,20 +38,19 @@ void main()
 	v.y = dot(lightDir, B);
 	v.z = dot(lightDir, N);
 	if( lightPos.w != 0.0 ) {
-		fL = normalize(v);//LightPosition.xyz - vPosition.xyz;
+		fL = normalize(v);
     }
 	
 	
+
     fN = vNormal*normalMatrix;
     
-	v.x = dot(vertexPosition, T);
-	v.y = dot(vertexPosition, B);
-	v.z = dot(vertexPosition, N);
+	v.x = dot(viewDir, T);
+	v.y = dot(viewDir, B);
+	v.z = dot(viewDir, N);
 	fE = normalize(v);
 	
-	vertexPosition = normalize(vertexPosition);
-	
-	vec3 halfVector = normalize(lightDir - vertexPosition);
+	vec3 halfVector = normalize(lightDir - viewDir);
 	v.x = dot(halfVector, T);
 	v.y = dot(halfVector, B);
 	v.z = dot(halfVector, N);
