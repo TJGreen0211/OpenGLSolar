@@ -4,8 +4,8 @@ const float toRadians = M_PI / 180.0;
 
 GLfloat Yaw = -90.0f;
 GLfloat Pitch = 0.0f;
-GLfloat MovementSpeed = 1000.0f;
-GLfloat MouseSensitivity = 0.6f;
+GLfloat MovementSpeed = 500.0f;
+GLfloat MouseSensitivity = 0.4f;
 GLfloat Zoom = 45.0f;
 
 float xpos = 0, ypos = 0, zpos = 0;
@@ -18,7 +18,7 @@ vec3 Front = {0.0, 0.0, -1.0};
 vec3 Right = {1.0, 0.0, 0.0};
 
 mat4 getViewMatrix()
-{	
+{
 	rx = rotateX(Pitch);
 	ry = rotateY(Yaw);
 	rxry = multiplymat4(rx, ry);
@@ -43,7 +43,7 @@ void updateCameraVectors()
 	front.y = sin(toRadians * Pitch);
 	front.z = sin(toRadians * Yaw) * cos(toRadians * Pitch);
 	Front = normalizevec3(front);
-	
+
 	Right = normalizevec3(crossvec3(Front, Up));
 	Up = normalizevec3(crossvec3(Right, Front));
 }
@@ -51,7 +51,7 @@ void updateCameraVectors()
 void processKeyboard(enum Camera_Movement direction, GLfloat deltaTime)
 {
 	GLfloat velocity = MovementSpeed * deltaTime;
-	
+
     if (direction == FORWARD)
         Position = plusequalvec3(Position, scalarMultvec3(Right, velocity));
     if (direction == BACKWARD)
@@ -71,10 +71,10 @@ void processMouseMovement(GLfloat xpos, GLfloat ypos)
 	lasty = ypos;
 	diffx *= MouseSensitivity;
 	diffy *= MouseSensitivity;
-	
+
 	Yaw += diffx;
 	Pitch += diffy;
-	
+
 	//if(constrainPitch == 1)
 	//{
 		if(Pitch > 89.0)

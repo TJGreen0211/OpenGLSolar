@@ -15,7 +15,7 @@ typedef struct moonParameters {
 } moonParameters;
 
 typedef struct planetParameters {
-	float radius; 
+	float radius;
 	float size;
 	float orbit;
 	float axialTilt;
@@ -25,7 +25,7 @@ typedef struct planetParameters {
 	GLuint normal;
 	GLuint displacement;
 	mat4 planetLocation;
-	
+
 } planetParameters;
 
 typedef struct atmosphereParameters {
@@ -44,9 +44,9 @@ static void *gladGetProcAddress(const char *name);
 #endif
 
 int mousePosX, mousePosY;
-imgButton button1, mercuryButton, venusButton, earthButton, marsButton, 
+imgButton button1, mercuryButton, venusButton, earthButton, marsButton,
 	jupiterButton, saturnButton, uranusButton, neptuneButton;
-	
+
 const float WIDTH = 1400, HEIGHT = 800;
 float ASPECT = 1400.0f/800.0f;
 
@@ -61,7 +61,7 @@ float zoom = 1;
 
 GLuint sunTexture;
 GLuint sunNormal;
-	
+
 GLuint moonTexture;
 GLuint skyboxShader, sunShader, planetShader, atmosphereShader;
 GLuint vertUIShader, fragUIShader, UIShader;
@@ -83,7 +83,7 @@ mat4 modelMatrices[11];
 mat4 planetTransform[11];
 float orbitSpeedArray[11] = {0};
 float rotationSpeedArray[11] = {0};
-float planetScaleMult = 50.0;
+float planetScaleMult = 100.0;
 float planetRadMult = 1000.0;
 vec3 translation;
 
@@ -99,8 +99,8 @@ float getScreenHeight()
 
 int *loadPlanetTextures(int planetTexArray[])
 {
-	char *textureStrings[] = {"include/textures/Planets/mercury.jpg", 
-		"include/textures/Planets/venus.png", 
+	char *textureStrings[] = {"include/textures/Planets/mercury.jpg",
+		"include/textures/Planets/venus.png",
 		"include/textures/Planets/earth.jpg",
 		"include/textures/Planets/mars.jpg",
 		"include/textures/Planets/ceres.jpg",
@@ -120,8 +120,8 @@ int *loadPlanetTextures(int planetTexArray[])
 
 int *loadPlanetNormals(int planetTexArray[])
 {
-	char *textureStrings[] = {"include/textures/Planets/mercuryNormal.png", 
-		"include/textures/Planets/venusNormal.png", 
+	char *textureStrings[] = {"include/textures/Planets/mercuryNormal.png",
+		"include/textures/Planets/venusNormal.png",
 		"include/textures/Planets/earthNormal.jpg",
 		"include/textures/Planets/marsNormal.png",
 		"include/textures/Planets/ceresNormal.png",
@@ -141,8 +141,8 @@ int *loadPlanetNormals(int planetTexArray[])
 
 int *loadPlanetDisplacementMap(int planetTexArray[])
 {
-	char *textureStrings[] = {"include/textures/Planets/earthDisplacement.png", 
-		"include/textures/Planets/earthDisplacement.png", 
+	char *textureStrings[] = {"include/textures/Planets/earthDisplacement.png",
+		"include/textures/Planets/earthDisplacement.png",
 		"include/textures/Planets/earthDisplacement.png",
 		"include/textures/Planets/jupiterDisplacement.png",
 		"include/textures/Planets/jupiterDisplacement.png",
@@ -166,36 +166,36 @@ void planetBuilder()
 	int numTextures = 11;
 	int planetTexArray[11];
 	*planetTexArray = *loadPlanetTextures(planetTexArray);
-	
+
 	int planetNormArray[11];
-	*planetNormArray = *loadPlanetNormals(planetNormArray);	
-	
+	*planetNormArray = *loadPlanetNormals(planetNormArray);
+
 	int planetDisplacementArray[11];
 	*planetDisplacementArray = *loadPlanetDisplacementMap(planetDisplacementArray);
-	
-	mercury.radius = 0.4*planetRadMult; mercury.size = 0.38*planetScaleMult; mercury.orbit = 0.240846; mercury.axialTilt = 0.034; mercury.day = 58.646; mercury.createAtmosphere = 0; 
+
+	mercury.radius = 0.4*planetRadMult; mercury.size = 0.38*planetScaleMult; mercury.orbit = 0.240846; mercury.axialTilt = 0.034; mercury.day = 58.646; mercury.createAtmosphere = 0;
 	mercury.texture = planetTexArray[0]; mercury.normal = planetNormArray[0]; mercury.displacement = planetDisplacementArray[0];
-	venus.radius = 0.7*planetRadMult; venus.size = 0.9499*planetScaleMult; venus.orbit = 0.615198; venus.axialTilt = 177.36; venus.day = 243.025; venus.createAtmosphere = 1; 
+	venus.radius = 0.7*planetRadMult; venus.size = 0.9499*planetScaleMult; venus.orbit = 0.615198; venus.axialTilt = 177.36; venus.day = 243.025; venus.createAtmosphere = 1;
 	venus.texture = planetTexArray[1]; venus.normal = planetNormArray[1]; venus.displacement = planetDisplacementArray[1];
-	earth.radius = 1.0*planetRadMult; earth.size = 1.0*planetScaleMult; earth.orbit = 1.0; earth.axialTilt = 23.4392811; earth.day = 1; earth.createAtmosphere = 1; 
+	earth.radius = 1.0*planetRadMult; earth.size = 1.0*planetScaleMult; earth.orbit = 1.0; earth.axialTilt = 23.4392811; earth.day = 1; earth.createAtmosphere = 1;
 	earth.texture = planetTexArray[2]; earth.normal = planetNormArray[2]; earth.displacement = planetDisplacementArray[2];
-	mars.radius = 1.5*planetRadMult; mars.size = 0.533*planetScaleMult; mars.orbit = 1.88; mars.axialTilt = 25.19; mars.day = 1.025957; mars.createAtmosphere = 1; 
+	mars.radius = 1.5*planetRadMult; mars.size = 0.533*planetScaleMult; mars.orbit = 1.88; mars.axialTilt = 25.19; mars.day = 1.025957; mars.createAtmosphere = 1;
 	mars.texture = planetTexArray[3]; mars.normal = planetNormArray[3]; mars.displacement = planetDisplacementArray[3];
-	ceres.radius = 2.77*planetRadMult; ceres.size = 0.07*planetScaleMult; ceres.orbit = 4.6; ceres.axialTilt = 4; ceres.day = 0.3781; ceres.createAtmosphere = 1; 
+	ceres.radius = 2.77*planetRadMult; ceres.size = 0.07*planetScaleMult; ceres.orbit = 4.6; ceres.axialTilt = 4; ceres.day = 0.3781; ceres.createAtmosphere = 1;
 	ceres.texture = planetTexArray[4]; ceres.normal = planetNormArray[4]; ceres.displacement = planetDisplacementArray[4];
-	jupiter.radius = 5.2*planetRadMult; jupiter.size = 11.209*planetScaleMult; jupiter.orbit = 11.8618; jupiter.axialTilt = 3.13; jupiter.day = 0.413; jupiter.createAtmosphere = 0; 
+	jupiter.radius = 5.2*planetRadMult; jupiter.size = 11.209*planetScaleMult; jupiter.orbit = 11.8618; jupiter.axialTilt = 3.13; jupiter.day = 0.413; jupiter.createAtmosphere = 0;
 	jupiter.texture = planetTexArray[5]; jupiter.normal = planetNormArray[5]; jupiter.displacement = planetDisplacementArray[5];
-	saturn.radius = 9.5*planetRadMult; saturn.size = 9.45*planetScaleMult; saturn.orbit = 29.4571; saturn.axialTilt = 26.73; saturn.day = 0.439583; saturn.createAtmosphere = 0; 
+	saturn.radius = 9.5*planetRadMult; saturn.size = 9.45*planetScaleMult; saturn.orbit = 29.4571; saturn.axialTilt = 26.73; saturn.day = 0.439583; saturn.createAtmosphere = 0;
 	saturn.texture = planetTexArray[6]; saturn.normal = planetNormArray[6]; saturn.displacement = planetDisplacementArray[6];
-	uranus.radius = 19.2*planetRadMult; uranus.size = 4.007*planetScaleMult; uranus.orbit = 84.0205; uranus.axialTilt = 97.77; uranus.day = 0.71833; uranus.createAtmosphere = 0; 
+	uranus.radius = 19.2*planetRadMult; uranus.size = 4.007*planetScaleMult; uranus.orbit = 84.0205; uranus.axialTilt = 97.77; uranus.day = 0.71833; uranus.createAtmosphere = 0;
 	uranus.texture = planetTexArray[7]; uranus.normal = planetNormArray[7]; uranus.displacement = planetDisplacementArray[7];
-	neptune.radius = 30.1*planetRadMult; neptune.size = 3.883*planetScaleMult; neptune.orbit = 164.8; neptune.axialTilt = 28.32; neptune.day = 0.6713; neptune.createAtmosphere = 0; 
+	neptune.radius = 30.1*planetRadMult; neptune.size = 3.883*planetScaleMult; neptune.orbit = 164.8; neptune.axialTilt = 28.32; neptune.day = 0.6713; neptune.createAtmosphere = 0;
 	neptune.texture = planetTexArray[8]; neptune.normal = planetNormArray[8]; neptune.displacement = planetDisplacementArray[8];
-	pluto.radius = 39*planetRadMult; pluto.size = 0.18*planetScaleMult; pluto.orbit = 248; pluto.axialTilt = 119.591; pluto.day = 6.387230; pluto.createAtmosphere = 1; 
+	pluto.radius = 39*planetRadMult; pluto.size = 0.18*planetScaleMult; pluto.orbit = 248; pluto.axialTilt = 119.591; pluto.day = 6.387230; pluto.createAtmosphere = 1;
 	pluto.texture = planetTexArray[9]; pluto.normal = planetNormArray[9]; pluto.displacement = planetDisplacementArray[9];
-	eris.radius = 68*planetRadMult; eris.size = 0.182*planetScaleMult; eris.orbit = 558.04; eris.axialTilt = 61.45; eris.day = 1.079167 ; eris.createAtmosphere = 0; 
+	eris.radius = 68*planetRadMult; eris.size = 0.182*planetScaleMult; eris.orbit = 558.04; eris.axialTilt = 61.45; eris.day = 1.079167 ; eris.createAtmosphere = 0;
 	eris.texture = planetTexArray[10]; eris.normal = planetNormArray[10]; eris.displacement = planetDisplacementArray[10];
-	
+
 	planetInstanceArray[0] = mercury;
 	planetInstanceArray[1] = venus;
 	planetInstanceArray[2] = earth;
@@ -223,7 +223,7 @@ void atmosphereBuilder() {
 	neptune.scaleFactor = 0.0; 	neptune.E = 14.3; 	neptune.C_R.x = 0.3; 	neptune.C_R.y = 0.7; 	neptune.C_R.z = 1.0;
 	pluto.scaleFactor = 3.5000; pluto.E = 14.3; 	pluto.C_R.x = 0.3; 	pluto.C_R.y = 0.7; 	pluto.C_R.z = 1.0;
 	ceres.scaleFactor = 0.0; 	ceres.E = 14.3;		ceres.C_R.x = 0.3; 	ceres.C_R.y = 0.7; 	ceres.C_R.z = 1.0;
-	
+
 	atmosphereArray[0] = mercury;
 	atmosphereArray[1] = venus;
 	atmosphereArray[2] = earth;
@@ -235,7 +235,7 @@ void atmosphereBuilder() {
 	atmosphereArray[8] = neptune;
 	atmosphereArray[9] = pluto;
 	atmosphereArray[10] = eris;
-	
+
 }
 
 void moonBuilder()
@@ -247,7 +247,7 @@ vec3 *generateTangents(int vertexNumber, vec3 *points, vec3 *tangent)
 {
 	vec3 axis = {0.0, 0.0, 1.0};
 	vec3 t;
-	
+
 	// The fragment shader samples the texture with the equirectangular
 	// mapping u = atan2(y, x), v = asin(z), so the tangent is the
 	// direction of increasing u: cross(axis, point) = (-y, x, 0).
@@ -267,7 +267,7 @@ vec3 *generateTangents(int vertexNumber, vec3 *points, vec3 *tangent)
 vec3 *generateSmoothNormals(int vertexNumber, vec3 *vna, vec3 *pointArray, vec3 *normalArray)
 {
 	vec3 vn;
-	
+
 	for(int i = 0; i < vertexNumber; i++)
 	{
 		vec3 tempvn = {0.0, 0.0, 0.0};
@@ -297,7 +297,7 @@ vec3 *generateSmoothNormals(int vertexNumber, vec3 *vna, vec3 *pointArray, vec3 
 
 void initObject() {
 	object = ObjLoadModel("include/obj/torus.obj");
-	
+
 	glGenVertexArrays(1, &objectVAO);
 	glBindVertexArray(objectVAO);
 	glGenBuffers(1, &objectVBO);
@@ -307,8 +307,8 @@ void initObject() {
 	glBufferSubData(GL_ARRAY_BUFFER, object.size, object.nsize, object.normals);
 	vPosition = glGetAttribLocation(sunShader, "vPosition");
     glEnableVertexAttribArray(vPosition);
-    glVertexAttribPointer(vPosition, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(0));	
-    
+    glVertexAttribPointer(vPosition, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(0));
+
     vNormal = glGetAttribLocation(sunShader, "vNormal");
     glEnableVertexAttribArray(vNormal);
     glVertexAttribPointer(vNormal, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(object.size));
@@ -318,33 +318,33 @@ void initObject() {
 void initPlanet() {
 	createShader(&planetShader, "src/shaders/planet.vert",
 		"src/shaders/planet.frag");
-	
+
 	vec3 *tangent = malloc(sizeof(vec3) * planet.vertexNumber);
 	generateTangents(planet.vertexNumber, planet.points, tangent);
 	vec3 *vna = malloc(sizeof(vec3) * planet.vertexNumber);
 	generateSmoothNormals(planet.vertexNumber, vna, planet.points, planet.normals);
-		
+
 	glGenVertexArrays(1, &planetVAO);
 	glBindVertexArray(planetVAO);
 	glGenBuffers(1, &planetVBO);
 	glBindBuffer(GL_ARRAY_BUFFER, planetVBO);
 	glBufferData(GL_ARRAY_BUFFER, planet.size + planet.nsize + sizeof(vec3) * planet.vertexNumber, NULL, GL_STATIC_DRAW);
 	glBufferSubData(GL_ARRAY_BUFFER, 0,	planet.size, planet.points);
-	glBufferSubData(GL_ARRAY_BUFFER, planet.size, planet.nsize, vna);	
+	glBufferSubData(GL_ARRAY_BUFFER, planet.size, planet.nsize, vna);
 	glBufferSubData(GL_ARRAY_BUFFER, planet.size+planet.nsize, sizeof(vec3) * planet.vertexNumber,	tangent);
-	
+
 	vPosition = glGetAttribLocation(planetShader, "vPosition");
     glEnableVertexAttribArray(vPosition);
-    glVertexAttribPointer(vPosition, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(0));	
-    
+    glVertexAttribPointer(vPosition, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(0));
+
     vNormal = glGetAttribLocation(planetShader, "vNormal");
     glEnableVertexAttribArray(vNormal);
     glVertexAttribPointer(vNormal, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(planet.size));
-    
+
     vTangent = glGetAttribLocation(planetShader, "vTangent");
     glEnableVertexAttribArray(vTangent);
     glVertexAttribPointer(vTangent, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(planet.size+planet.nsize));
-    
+
 	glBindVertexArray(0);
 
 	free(tangent);
@@ -354,7 +354,7 @@ void initPlanet() {
 void initAtmosphere() {
 	createShader(&atmosphereShader, "src/shaders/atmosphere.vert",
 		"src/shaders/atmosphere.frag");
-    
+
     glGenVertexArrays(1, &atmosphereVAO);
 	glBindVertexArray(atmosphereVAO);
 	glGenBuffers(1, &atmosphereVBO);
@@ -364,8 +364,8 @@ void initAtmosphere() {
 	glBufferSubData(GL_ARRAY_BUFFER, planet.size, planet.nsize, planet.normals);
 	vPosition = glGetAttribLocation(atmosphereShader, "vPosition");
     glEnableVertexAttribArray(vPosition);
-    glVertexAttribPointer(vPosition, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(0));	
-    
+    glVertexAttribPointer(vPosition, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(0));
+
     vNormal = glGetAttribLocation(atmosphereShader, "vNormal");
     glEnableVertexAttribArray(vNormal);
     glVertexAttribPointer(vNormal, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(planet.size));
@@ -374,7 +374,7 @@ void initAtmosphere() {
 
 void initSkybox() {
 	GLfloat skyboxVertices[] = {
-        // Positions          
+        // Positions
         -1.0f, 1.0f, -1.0f,
         -1.0f, -1.0f, -1.0f,
         1.0f, -1.0f, -1.0f,
@@ -416,11 +416,11 @@ void initSkybox() {
         1.0f, -1.0f, -1.0f,
         -1.0f, -1.0f, 1.0f,
         1.0f, -1.0f, 1.0f
-    };  
-    
+    };
+
     createShader(&skyboxShader, "src/shaders/skybox.vert",
 		"src/shaders/skybox.frag");
-    
+
 	glGenVertexArrays(1, &skyboxVAO);
 	glBindVertexArray(skyboxVAO);
     glGenBuffers(1, &skyboxVBO);
@@ -441,9 +441,9 @@ void initFramebuffer() {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, shadowWidth, shadowHeight, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    
+
     glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMap, 0);
     glDrawBuffer(GL_NONE);
@@ -483,22 +483,22 @@ void createPerspectiveMatrix()
 }
 
 void setupLighting(int program)
-{	
+{
     vec4 light_ambient = {0.2, 0.2, 0.2, 1.0};
     vec4 light_diffuse = {1.0, 1.0, 1.0, 1.0};
     vec4 light_specular = {1.0, 1.0, 1.0, 1.0};
-    
+
     vec4 material_ambient = {0.2, 0.2, 1.0, 1.0};
     vec4 material_diffuse = {0.8, 0.8, 0.8, 1.0};
     vec4 material_specular = {0.5, 0.5, 0.5, 1.0};
-    
-    vec4 light_position = {0.0, 0.0, 1.0, 1.0}; 
+
+    vec4 light_position = {0.0, 0.0, 1.0, 1.0};
     float material_shininess = 50.0f;
-    
+
     vec4 ambient_product = multiplyvec4(light_ambient, material_ambient);
     vec4 diffuse_product = multiplyvec4(light_diffuse, material_diffuse);
     vec4 specular_product = multiplyvec4(light_specular, material_specular);
-    
+
     glUniform4fv( glGetUniformLocation(program, "ambientProduct"), 1, (float*)(&ambient_product) );
     glUniform4fv( glGetUniformLocation(program, "diffuseProduct"), 1, (float*)(&diffuse_product) );
     glUniform4fv( glGetUniformLocation(program, "specularProduct"), 1, (float*)(&specular_product) );
@@ -516,22 +516,22 @@ void initMVP(int shader, mat4 m, mat4 v)
 void drawSkybox(skyboxTexture)
 {
 	glUseProgram(skyboxShader);
-	
+
 	glDepthMask(GL_FALSE);
 	glDepthFunc(GL_LEQUAL);
-    
+
     mat4 mv = getViewRotation();
-    
-	glUniformMatrix4fv(glGetUniformLocation( skyboxShader, "projection" ), 1, GL_TRUE, &p.m[0][0]);  
+
+	glUniformMatrix4fv(glGetUniformLocation( skyboxShader, "projection" ), 1, GL_TRUE, &p.m[0][0]);
     glUniformMatrix4fv(glGetUniformLocation( skyboxShader, "ModelView" ), 1, GL_TRUE, &mv.m[0][0] );
-    
+
     glBindVertexArray (skyboxVAO);
     glActiveTexture(GL_TEXTURE0);
     glUniform1i(glGetUniformLocation(skyboxShader, "skybox"), 0);
     glBindTexture(GL_TEXTURE_CUBE_MAP, skyboxTexture);
     glDrawArrays(GL_TRIANGLES, 0, 36);
     glBindVertexArray(0);
-    
+
     glDepthMask(GL_TRUE);
 }
 
@@ -540,9 +540,9 @@ void drawObj()
 	glUseProgram(planetShader);
 	//mat4 rx = multiplymat4(translate(0.0, 0.0, -15.0), rotationSpace());
 	mat4 m = scale(100);//rx;//multiplymat4(rx, rotateY(90));
-	
+
 	initMVP(planetShader, m, v);
-	
+
 	glBindVertexArray (objectVAO);
 	//glDrawArrays( GL_TRIANGLES, 0, object.vertexNumber );
     glBindVertexArray(0);
@@ -554,31 +554,31 @@ void bindTexture(GLuint activeTex, GLuint tex) {
 }
 
 void drawSun()
-{   
+{
 	glUseProgram(sunShader);
-	
+
 	setupLighting(sunShader);
-	
+
 	//glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
-	
+
 	mat4 a = translate(0.0, 0.0, 0.0); //333.0 Times
 	mat4 rotation = rotateY(theta);
 	mat4 b = multiplymat4(a, rotation);
 	mat4 m = multiplymat4(b, scale(100.0));
-	
+
 	initMVP(sunShader, m, v);
 	glUniform1f(glGetUniformLocation(sunShader, "systemTime"), glfwGetTime());
-    
+
     glBindVertexArray (planetVAO);
     bindTexture(GL_TEXTURE0, sunTexture);
     bindTexture(GL_TEXTURE1, sunNormal);
     glUniform1i(glGetUniformLocation(sunShader, "tex"), 0);
     glUniform1i(glGetUniformLocation(sunShader, "normalTex"), 1);
-    
+
     glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber );
     glBindVertexArray(0);
-    //glBindFramebuffer(GL_FRAMEBUFFER, 0);  
-    
+    //glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
     glActiveTexture(GL_TEXTURE2);
     //glBindTexture(GL_TEXTURE_2D, colorBuffer);
     glUniform1f(glGetUniformLocation(sunShader, "exposure"), 1.0);
@@ -588,31 +588,37 @@ void drawAtmosphere()
 {
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_ONE, GL_ONE);
-		
+
 	glUseProgram(atmosphereShader);
 	//setupLighting(atmosphereShader);
-	
-	
+
+
 	for(int i = 0; i < 11; i++)
-    {	
-    	if(planetInstanceArray[i].createAtmosphere) {
+    {
+     	if(planetInstanceArray[i].createAtmosphere) {
 			float scaleFactor = atmosphereArray[i].scaleFactor;
 			float fOuter = planetInstanceArray[i].size*scaleFactor;
 			float fInner = (planetInstanceArray[i].size);
+			if (fOuter <= fInner) {
+				// no real shell (e.g. atmosphere scale not set); skip
+				continue;
+			}
 			//translation.x = planetInstanceArray[2].radius * cos(orbitSpeedArray[2]);
 			//translation.y = 0.0;
 			//translation.z = planetInstanceArray[2].radius * sin(orbitSpeedArray[2]);
-		
+
 			mat4 modelmat = planetTransform[i];
 			mat4 tv = transposemat4(multiplymat4(modelmat, getViewPosition()));
 			vec4 camMult = {-tv.m[3][0], -tv.m[3][1], -tv.m[3][2], -tv.m[3][3]};
 			vec4 camPosition = multiplymat4vec4(tv, camMult);
-		
+
 			//mat4 m = multiplymat4(translatevec3(translation), scale());
-			mat4 m = multiplymat4(modelmat, scale(planetInstanceArray[2].size*scaleFactor));
+			mat4 m = multiplymat4(modelmat, scale(planetInstanceArray[i].size*scaleFactor));
+			// 1/lambda^4 for lambda = (0.3, 0.7, 1.0) um, normalized so blue = 1
+			// vec3 C_R = {1.0, 0.0337, 0.0081};
 			vec3 C_R = {0.3, 0.7, 1.0};
 			float E = 14.3;
-		
+
 			glUniform1f(glGetUniformLocation(atmosphereShader, "fInnerRadius"), fInner);
 			glUniform1f(glGetUniformLocation(atmosphereShader, "fOuterRadius"), fOuter);
 			glUniform3f(glGetUniformLocation(atmosphereShader, "camPosition"), camPosition.x, camPosition.y, camPosition.z);
@@ -621,9 +627,22 @@ void drawAtmosphere()
 			glUniform1f(glGetUniformLocation(atmosphereShader, "time"), glfwGetTime());
 
 			initMVP(atmosphereShader, m, v);
-		
+
 			glBindVertexArray (atmosphereVAO);
+			// The dome is an outward-facing sphere. When the camera is inside the
+			// outer atmosphere every visible dome triangle is a back face, so
+			// swap the cull face (the paper inverts the sky dome's front faces
+			// for the camera-in-atmosphere case). The sky is a pure additive
+			// pass and must not write depth, or its surface would hide the
+			// moon/objects beyond the shell behind it.
+			float camDistSq = camPosition.x*camPosition.x + camPosition.y*camPosition.y + camPosition.z*camPosition.z;
+			glDepthMask(GL_FALSE);
+			if (camDistSq < fOuter*fOuter) {
+				glCullFace(GL_FRONT);
+			}
 			glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber);
+			glCullFace(GL_BACK);
+			glDepthMask(GL_TRUE);
 			glBindVertexArray(0);
 		}
     }
@@ -631,13 +650,13 @@ void drawAtmosphere()
 }
 
 void drawPlanet()
-{   		
+{
 	//drawAtmosphere(translation, planetInstanceArray[2].size, 1.025);
-	
+
 	glUseProgram(planetShader);
 	setupLighting(planetShader);
 	for(int i = 0; i < 11; i++)
-	{	
+	{
 		translation.x = planetInstanceArray[i].radius * cos(orbitSpeedArray[i]);
 		translation.y = 0.0;
 		translation.z = planetInstanceArray[i].radius * sin(orbitSpeedArray[i]);
@@ -647,7 +666,7 @@ void drawPlanet()
 		planetTransform[i] = translatevec3(translation);
 
 		initMVP(planetShader, m, v);
-    	
+
     	glBindVertexArray (planetVAO);
     	bindTexture(GL_TEXTURE0, planetInstanceArray[i].texture);
     	bindTexture(GL_TEXTURE1, planetInstanceArray[i].normal);
@@ -665,15 +684,15 @@ void drawMoon()
 {
 	glUseProgram(planetShader);
 	setupLighting(planetShader);
-	
+
 	translation.x = 400.0 * cos(orbitSpeedArray[2]*2.0);
 	translation.y = 0.0;
 	translation.z = 400.0 * sin(orbitSpeedArray[2]*2.0);
-	
+
 	mat4 m = multiplymat4(multiplymat4(planetTransform[2],translatevec3(translation)), scale(planetInstanceArray[2].size/4.0));
-	
+
 	initMVP(planetShader, m, v);
-    
+
     glBindVertexArray (planetVAO);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, planetInstanceArray[2].texture);
@@ -790,7 +809,7 @@ void initializePlanetButtons()
 	venusButton = initButton(200.0, 100.0, 50.0, &venusButton, "include/textures/buttons/venus.png");
 	earthButton = initButton(300.0, 100.0, 50.0, &earthButton, "include/textures/buttons/earth.png");
 	marsButton = initButton(400.0, 100.0, 50.0, &marsButton, "include/textures/buttons/mars.png");
-	
+
 	jupiterButton = initButton(500.0, 100.0, 50.0, &jupiterButton, "include/textures/buttons/jupiter.png");
 	saturnButton = initButton(600.0, 100.0, 50.0, &saturnButton, "include/textures/buttons/saturn.png");
 	uranusButton = initButton(700.0, 100.0, 50.0, &uranusButton, "include/textures/buttons/uranus.png");
@@ -846,17 +865,17 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "[trace] main: loading skybox\n");
 	GLuint skyboxTexture = initCubemap();
 	fprintf(stderr, "[trace] main: skybox loaded\n");
-	
+
 	//GLFWwindow* window2 = glfwCreateWindow(500, 500, "SolarSystem", NULL, NULL);
 	//glfwMakeContextCurrent(window2);
-	
+
 	/*Cross platform compatibility stuff uncomment if not on mac
 	GLenum err = glewInit();
 	if (GLEW_OK != err)
 	{
   		printf(stderr, "Error: %s\n", glewGetErrorString(err));
 	}*/
-	
+
 	fprintf(stderr, "[trace] main: loading sun textures\n");
 	sunTexture = loadTexture("include/textures/Planets/sun2.jpg");
 	sunNormal = loadTexture("include/textures/Planets/sunNormal.png");
@@ -876,7 +895,7 @@ int main(int argc, char *argv[])
 	glEnable(GL_MULTISAMPLE);
 	glCullFace(GL_BACK);
 	attachGUIShaders();
-	
+
 	float fpsFrames= 0;
 	float lastTime = 0;
 	while(!glfwWindowShouldClose(window))
@@ -885,7 +904,7 @@ int main(int argc, char *argv[])
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
         v = getViewMatrix();
-        
+
         fpsFrames++;
 		if(currentFrame - lastTime >= 1.0)
 		{
@@ -893,10 +912,10 @@ int main(int argc, char *argv[])
 			fpsFrames = 0;
 			lastTime += 1.0;
 		}
-        
+
 		glfwPollEvents();
 		doMovement();
-		
+
 		glfwPollEvents();
 		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -915,10 +934,10 @@ int main(int argc, char *argv[])
 		//glFrontFace(GL_CCW);
 		drawObj();
 		drawMoon();
-		
+
 		//drawButton(button1);
 		//drawPlanetButtons();
-		
+
 		if(stopRotation == 0){
 			for(int i = 0; i < 11; i++)
 			{
@@ -930,13 +949,13 @@ int main(int argc, char *argv[])
 			}
 			theta += 0.009;
 		}
-		
+
 		glfwSwapBuffers(window);
 	}
-	
+
 	glDeleteVertexArrays(1, &planetVAO);
     glDeleteBuffers(1, &planetVBO);
-	
+
 	glfwTerminate();
 	return 0;
 }
@@ -950,7 +969,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     	actionPress = GLFW_PRESS;
     else if(action == GLFW_RELEASE)
     	actionPress = 0;
-    	
+
     if (key == GLFW_KEY_W && action == GLFW_PRESS){
     	keys = GLFW_KEY_W;
     	doMovement();
