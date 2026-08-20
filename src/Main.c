@@ -85,7 +85,7 @@ mat4 planetTransform[11];
 float orbitSpeedArray[11] = {0};
 float rotationSpeedArray[11] = {0};
 float planetScaleMult = 100.0;
-float planetRadMult = 1000.0;
+float planetRadMult = 2000.0;
 // World-space radius of the sun's billboard (its on-screen size is this value
 // projected at the sun's distance, so the sun shrinks as the camera pulls
 // back). Tune larger for a bigger sun, smaller for a smaller one.
@@ -580,10 +580,11 @@ void bindTexture(GLuint activeTex, GLuint tex) {
     glBindTexture(GL_TEXTURE_2D, tex);
 }
 
-void drawSun()
+// Shared uniforms for both sun passes (same billboard, same projected centre
+// and half-size). uDisc picks the fragment-shader mode: 1 = opaque disc,
+// 0 = additive corona halo.
+static void setupSunUniforms(GLfloat uDisc)
 {
-	glUseProgram(sunShader);
-
 	glUniformMatrix4fv(glGetUniformLocation( sunShader, "projection" ), 1, GL_FALSE, &p.m[0][0]);
 	glUniformMatrix4fv(glGetUniformLocation( sunShader, "view" ), 1, GL_FALSE, &v.m[0][0]);
 	glUniform1f(glGetUniformLocation(sunShader, "sunRadius"), SUN_GLOW_RADIUS);
@@ -597,19 +598,51 @@ void drawSun()
 	bindTexture(GL_TEXTURE1, sunNormal);
 	glUniform1i(glGetUniformLocation(sunShader, "tex"), 0);
 	glUniform1i(glGetUniformLocation(sunShader, "normalTex"), 1);
+	glUniform1f(glGetUniformLocation(sunShader, "uDisc"), uDisc);
+}
+
+// Fullscreen quad corners are in perimeter order (BL,BR,TR,TL). Draw as a fan,
+// which tiles that ordering into two non-overlapping CCW triangles; a strip in
+// perimeter order leaves the top-left sector uncovered.
+static void drawSunQuadPass(void)
+{
+	glBindVertexArray(sunQuadVAO);
+	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+	glBindVertexArray(0);
+}
+
+// Opaque sun sphere. Drawn BEFORE the planets, with depth writes on, so its
+// stored depth makes it occlude any planet that orbits behind it. A planet in
+// front is closer, so it still (correctly) draws over the disc.
+void drawSunDisc()
+{
+	glUseProgram(sunShader);
+	setupSunUniforms(1.0f);
+
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS);
+	glDepthMask(GL_TRUE);
+	glDisable(GL_BLEND);
+
+	drawSunQuadPass();
+}
+
+// Additive corona halo. Drawn LAST: depth-tested against the scene (so a
+// passing planet still hides it) but never writes depth, so planets behind the
+// halo stay visible and the glow simply blends over them.
+void drawSun()
+{
+	glUseProgram(sunShader);
+	setupSunUniforms(0.0f);
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_ONE, GL_ONE);
-	glDepthFunc(GL_LEQUAL);
-
-	glBindVertexArray(sunQuadVAO);
-	// Fullscreen quad corners are in perimeter order (BL,BR,TR,TL). Draw as a
-	// fan, which tiles that ordering into two non-overlapping CCW triangles;
-	// a strip in perimeter order leaves the top-left sector uncovered.
-	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-	glBindVertexArray(0);
-
 	glDepthFunc(GL_LESS);
+	glDepthMask(GL_FALSE);
+
+	drawSunQuadPass();
+
+	glDepthMask(GL_TRUE);
 	glDisable(GL_BLEND);
 }
 
@@ -956,13 +989,18 @@ int main(int argc, char *argv[])
 		}
 
 		drawSkybox(skyboxTexture);
-		drawSun();
+		// Opaque sun sphere first: it writes depth, so it occludes any planet
+		// that orbits behind it (a closer planet still draws over the disc).
+		drawSunDisc();
 		drawPlanet();
 		//glFrontFace(GL_CW);
 		drawAtmosphere();
 		//glFrontFace(GL_CCW);
 		drawObj();
 		drawMoon();
+		// Corona halo last: additive, no depth write, so it blends over
+		// anything behind it while still being occluded by anything in front.
+		drawSun();
 
 		//drawButton(button1);
 		//drawPlanetButtons();

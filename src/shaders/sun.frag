@@ -10,6 +10,7 @@ uniform float systemTime;
 uniform float aspect;
 uniform sampler2D tex;
 uniform sampler2D normalTex;
+uniform float uDisc;
 
 float snoise(vec3 uv, float res)	// by trisomie21
 {
@@ -96,13 +97,37 @@ void main()
 	}
 
 	float starGlow	= min( max( 1.0 - dist * ( 1.0 - brightness ), 0.0 ), 1.0 );
-	FragColor.rgb	= vec3( f * ( 0.75 + brightness * 0.3 ) * orange ) + starSphere + corona * orange + starGlow * orangeRed;
-	FragColor.a		= 1.0;
 
-	// Disc uses the sun's real depth so it occludes / gets occluded like any
-	// object; the glow is pushed to the far plane so real geometry in front wins.
-	if( dist < radius )
+	// Two passes over the same billboard, selected by uDisc:
+	//  uDisc = 1 : the opaque sphere (central disc). Kept where dist < radius
+	//              and written with the sun's real depth, so it occludes any
+	//              planet that orbits behind it. Clamp: an opaque surface can
+	//              no longer blow past white the way the old additive blend did.
+	//  uDisc = 0 : the corona halo (outside the disc). Additive and never
+	//              writes depth, so planets orbiting behind the halo still show.
+	if( uDisc > 0.5 )
+	{
+		if( dist >= radius )
+			discard;
+
+		vec3 core = vec3( f * ( 0.75 + brightness * 0.3 ) * orange )
+		 		 + starSphere
+		 		 + corona * orange
+		 		 + starGlow * orangeRed;
+		FragColor	= vec4( clamp( core, 0.0, 1.0 ), 1.0 );
 		gl_FragDepth = sunDepth;
+	}
 	else
-		gl_FragDepth = 1.0;
+	{
+		if( dist < radius )
+			discard;
+
+		FragColor.rgb	= vec3( f * ( 0.75 + brightness * 0.3 ) * orange )
+		 			 + corona * orange
+		 			 + starGlow * orangeRed;
+		FragColor.a		= 1.0;
+		// Test-only depth so the halo is still hidden by geometry in front;
+		// the depth mask is off on the CPU side, so nothing is written.
+		gl_FragDepth = sunDepth;
+	}
 }
