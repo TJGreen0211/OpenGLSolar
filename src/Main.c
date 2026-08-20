@@ -57,7 +57,6 @@ int actionPress;
 
 float zNear = 0.5, zFar = 100000.0;
 float theta = 0.0;
-float zoom = 1;
 
 GLuint sunTexture;
 GLuint sunNormal;
@@ -506,7 +505,7 @@ void init()
 
 void createPerspectiveMatrix()
 {
-	p = perspective(zoom*45.0, ASPECT, zNear, zFar);
+	p = perspective(45.0f, ASPECT, zNear, zFar);
 }
 
 void setupLighting(int program)
@@ -1069,7 +1068,7 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 	int state = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT);
 	if (state == GLFW_PRESS)
 	{
-		processMouseMovement(xpos, ypos);
+		processMouseMovement(window, xpos, ypos);
 	}
 	mousePosX = xpos;
 	mousePosY = ypos;
@@ -1091,13 +1090,18 @@ void checkButtonPress(imgButton b)
 }
 
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
-	if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
 	{
 		checkButtonPress(button1);
+		processMousePress(window);
+	}
+	else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
+	{
+		processMouseRelease();
 	}
 }
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
-	zoom = processMouseScroll(yoffset, zoom);
+	processMouseScroll((GLfloat)yoffset);
 }

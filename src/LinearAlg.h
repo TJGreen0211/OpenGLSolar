@@ -33,6 +33,9 @@ typedef struct vec2 {
 	float x, y;
 } vec2;
 
+extern mat4 IDENTITY_MATRIX;
+extern mat4 ZERO_MATRIX;
+
 vec4 addvec4(vec4 v, vec4 u);
 vec3 addvec3(vec3 v, vec3 u);
 vec2 addvec2(vec2 v, vec2 u);

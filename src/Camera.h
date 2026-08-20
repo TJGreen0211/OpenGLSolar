@@ -23,6 +23,10 @@ enum Camera_Movement {
 };
 
 
+extern float CameraDistance;
+extern const float CameraDistanceMax;
+extern GLfloat MovementSpeed;
+
 mat4 getViewMatrix();
 mat4 getViewPosition();
 mat4 getViewRotation();
@@ -31,7 +35,9 @@ vec3 getCameraPosition();
 
 void updateCameraVectors();
 void processKeyboard(enum Camera_Movement direction, GLfloat deltaTime);
-void processMouseMovement(GLfloat xpos, GLfloat ypos);
-float processMouseScroll(GLfloat yoffset, float zoom);
+void processMousePress(GLFWwindow *window);
+void processMouseRelease(void);
+void processMouseMovement(GLFWwindow *window, GLfloat xpos, GLfloat ypos);
+void processMouseScroll(GLfloat yoffset);
 
 #endif
