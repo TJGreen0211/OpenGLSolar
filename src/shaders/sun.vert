@@ -1,78 +1,42 @@
 #version 410
 
-in vec4 vPosition;
-in vec3 vNormal;
-in vec3 vTangent;
-in vec3 vBitangent;
+in vec3 vPosition;
 
-out vec3 fN;
-out vec3 fE;
-out vec3 fL;
-out vec3 fH;
-
-out vec4 TexCoords;
+out vec2 starOffset;
 
 uniform mat4 view;
-uniform mat4 model;
 uniform mat4 projection;
-uniform vec4 LightPosition;
-uniform vec3 camPosition;
+uniform float sunRadius;
 
 void main()
 {
-	mat4 ModelView = model*view;
-	vec4 vLightPosition = ModelView*LightPosition*vec4(camPosition,1.0);
-	gl_Position = vPosition*ModelView*projection;
-	
-	mat3 normalMatrix = transpose(inverse(mat3(ModelView)));
-	vec3 T = normalize(normalMatrix * vTangent);
-	vec3 N = normalize(normalMatrix * vNormal);
-	vec3 B = cross(N, T);//normalize(normalMatrix * vBitangent);
-	
-	vec3 vertexPosition = vec3(vLightPosition).xyz;
-	vec3 lightDir = normalize(vLightPosition.xyz - vPosition.xyz);
-	
-	
-    fN = vNormal;
-    fL = vec3(vPosition*ModelView).xyz;
-    
-    vec3 v;
-	v.x = dot(lightDir, T);
-	v.y = dot(lightDir, B);
-	v.z = dot(lightDir, N);
-	if( LightPosition.w != 0.0 ) {
-		fL = normalize(lightDir);//LightPosition.xyz - vPosition.xyz;
-    }
-	
-	v.x = dot(vertexPosition, T);
-	v.y = dot(vertexPosition, B);
-	v.z = dot(vertexPosition, N);
-	fE = normalize(v);
-	
-	vertexPosition = normalize(vertexPosition);
-	
-	vec3 halfVector = normalize(fE + fL);
-	v.x = dot (halfVector, T);
-	v.y = dot (halfVector, B);
-	v.z = dot (halfVector, N);
-	fH = v;
-    
-    TexCoords = vPosition;
+	// Row-vector convention (matches planet.vert / the rest of the app):
+	// the sun sits at the world origin.
+	vec4 sunView = vec4(0.0, 0.0, 0.0, 1.0) * view;
+	if( sunView.z >= 0.0 )
+	{
+		// At or behind the camera image plane the sun would be degenerate,
+		// so emit everything off-screen (a zero-area point that clips away).
+		gl_Position = vec4(2.0, 0.0, 0.0, 1.0);
+		starOffset = vec2(0.0);
+		return;
+	}
+
+	vec4 clip = sunView * projection;
+
+	// Size the billboard by the sun's *projected* radius so it scales with
+	// distance like any other object. Project the origin and a point
+	// sunRadius away in view-space +X (same depth); the difference in their
+	// NDC x is the on-screen half-size of a sphere of radius sunRadius at the
+	// sun's depth.
+	vec4 clipR = (sunView + vec4(sunRadius, 0.0, 0.0, 0.0)) * projection;
+	float ndcRadius = abs( clipR.x / clipR.w - clip.x / clip.w );
+
+	// Spread the quad corners (vPosition.x/y in [-1,1]) by that NDC half-size.
+	// Multiply by clip.w so the w-divide in projection is exact.
+	clip.x += vPosition.x * ndcRadius * clip.w;
+	clip.y += vPosition.y * ndcRadius * clip.w;
+
+	gl_Position = clip;
+	starOffset = vPosition.xy * 2.0;
 }
-
-/*
-	
-	
-	gl_Position = projection*ModelView*vPosition;
-    fN = vNormal;
-    fL = vec3(ModelView*vPosition).xyz;
-    fE = vPosition.xyz;//(LightPosition.xyz-fL).xyz;
-    if( LightPosition.w != 0.0 ) {
-		fL = LightPosition.xyz - vPosition.xyz;
-    }
-    
-    
-    
-    TexCoords = vPosition;
-
-*/

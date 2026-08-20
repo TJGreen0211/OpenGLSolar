@@ -67,6 +67,7 @@ GLuint skyboxShader, sunShader, planetShader, atmosphereShader;
 GLuint vertUIShader, fragUIShader, UIShader;
 GLuint vPosition, vNormal, vTangent, vBitangent;
 GLuint planetVAO, planetVBO, skyboxVAO, skyboxVBO, objectVAO, objectVBO, atmosphereVAO, atmosphereVBO;
+GLuint sunQuadVAO, sunQuadVBO;
 GLuint shadowFBO, depthMap, rboDepth;
 GLuint ModelView, projection, model, view;
 mat4 p, v;
@@ -85,6 +86,10 @@ float orbitSpeedArray[11] = {0};
 float rotationSpeedArray[11] = {0};
 float planetScaleMult = 100.0;
 float planetRadMult = 1000.0;
+// World-space radius of the sun's billboard (its on-screen size is this value
+// projected at the sun's distance, so the sun shrinks as the camera pulls
+// back). Tune larger for a bigger sun, smaller for a smaller one.
+const float SUN_GLOW_RADIUS = 3000.0f;
 vec3 translation;
 
 float getScreenWidth()
@@ -454,6 +459,27 @@ void initFramebuffer() {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+void initSunQuad()
+{
+	GLfloat quadVertices[] = {
+		-1.0f, -1.0f, 0.0f,
+		 1.0f, -1.0f, 0.0f,
+		 1.0f,  1.0f, 0.0f,
+		-1.0f,  1.0f, 0.0f
+	};
+
+	glGenVertexArrays(1, &sunQuadVAO);
+	glBindVertexArray(sunQuadVAO);
+	glGenBuffers(1, &sunQuadVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, sunQuadVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+
+	GLint vPositionLoc = glGetAttribLocation(sunShader, "vPosition");
+	glEnableVertexAttribArray(vPositionLoc);
+	glVertexAttribPointer(vPositionLoc, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+	glBindVertexArray(0);
+}
+
 void init()
 {
 	fprintf(stderr, "[trace] init: tetrahedron\n");
@@ -461,6 +487,7 @@ void init()
 	//atmosphere = tetrahedron(5);
 	createShader(&sunShader, "src/shaders/sun.vert",
 		"src/shaders/sun.frag");
+	initSunQuad();
 	fprintf(stderr, "[trace] init: framebuffer\n");
 
     initFramebuffer();
@@ -557,31 +584,30 @@ void drawSun()
 {
 	glUseProgram(sunShader);
 
-	setupLighting(sunShader);
-
-	//glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
-
-	mat4 a = translate(0.0, 0.0, 0.0); //333.0 Times
-	mat4 rotation = rotateY(theta);
-	mat4 b = multiplymat4(a, rotation);
-	mat4 m = multiplymat4(b, scale(100.0));
-
-	initMVP(sunShader, m, v);
+	glUniformMatrix4fv(glGetUniformLocation( sunShader, "projection" ), 1, GL_FALSE, &p.m[0][0]);
+	glUniformMatrix4fv(glGetUniformLocation( sunShader, "view" ), 1, GL_FALSE, &v.m[0][0]);
+	glUniform1f(glGetUniformLocation(sunShader, "sunRadius"), SUN_GLOW_RADIUS);
 	glUniform1f(glGetUniformLocation(sunShader, "systemTime"), glfwGetTime());
 
-    glBindVertexArray (planetVAO);
-    bindTexture(GL_TEXTURE0, sunTexture);
-    bindTexture(GL_TEXTURE1, sunNormal);
-    glUniform1i(glGetUniformLocation(sunShader, "tex"), 0);
-    glUniform1i(glGetUniformLocation(sunShader, "normalTex"), 1);
+	int viewport[4];
+	glGetIntegerv(GL_VIEWPORT, viewport);
+	glUniform1f(glGetUniformLocation(sunShader, "aspect"), (float)viewport[2] / (float)viewport[3]);
 
-    glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber );
-    glBindVertexArray(0);
-    //glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	bindTexture(GL_TEXTURE0, sunTexture);
+	bindTexture(GL_TEXTURE1, sunNormal);
+	glUniform1i(glGetUniformLocation(sunShader, "tex"), 0);
+	glUniform1i(glGetUniformLocation(sunShader, "normalTex"), 1);
 
-    glActiveTexture(GL_TEXTURE2);
-    //glBindTexture(GL_TEXTURE_2D, colorBuffer);
-    glUniform1f(glGetUniformLocation(sunShader, "exposure"), 1.0);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE);
+	glDepthFunc(GL_LEQUAL);
+
+	glBindVertexArray(sunQuadVAO);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	glBindVertexArray(0);
+
+	glDepthFunc(GL_LESS);
+	glDisable(GL_BLEND);
 }
 
 void drawAtmosphere()
