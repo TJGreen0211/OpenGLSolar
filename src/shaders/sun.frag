@@ -1,6 +1,9 @@
 #version 410
 
-in vec2 starOffset;
+in vec2 fragNdc;
+in vec2 sunNdc;
+in float sunHalf;
+in float sunDepth;
 out vec4 FragColor;
 
 uniform float systemTime;
@@ -33,6 +36,11 @@ float snoise(vec3 uv, float res)	// by trisomie21
 
 void main()
 {
+	// Position of this pixel relative to the sun's centre, in the same units
+	// the corona math expects: 0 at the centre, ~2 at the corona's full
+	// extent, which spans sunHalf NDC units on each side of the centre.
+	vec2 starOffset = ( fragNdc - sunNdc ) * ( 2.0 / max( sunHalf, 1e-4 ) );
+
 	float freqs[4];
 	freqs[0] = texture( normalTex, vec2( 0.01, 0.25 ) ).x;
 	freqs[1] = texture( normalTex, vec2( 0.07, 0.25 ) ).x;
@@ -91,8 +99,10 @@ void main()
 	FragColor.rgb	= vec3( f * ( 0.75 + brightness * 0.3 ) * orange ) + starSphere + corona * orange + starGlow * orangeRed;
 	FragColor.a		= 1.0;
 
-	if( dist < 0.03 ) FragColor.rgb = vec3(0.0, 1.0, 0.0);
-
-	if( dist >= radius )
+	// Disc uses the sun's real depth so it occludes / gets occluded like any
+	// object; the glow is pushed to the far plane so real geometry in front wins.
+	if( dist < radius )
+		gl_FragDepth = sunDepth;
+	else
 		gl_FragDepth = 1.0;
 }

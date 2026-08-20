@@ -603,7 +603,10 @@ void drawSun()
 	glDepthFunc(GL_LEQUAL);
 
 	glBindVertexArray(sunQuadVAO);
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	// Fullscreen quad corners are in perimeter order (BL,BR,TR,TL). Draw as a
+	// fan, which tiles that ordering into two non-overlapping CCW triangles;
+	// a strip in perimeter order leaves the top-left sector uncovered.
+	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 	glBindVertexArray(0);
 
 	glDepthFunc(GL_LESS);
