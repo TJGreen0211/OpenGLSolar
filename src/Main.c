@@ -5,11 +5,15 @@
 #include <direct.h>
 #else
 #include <unistd.h>
+#include <sys/stat.h>
 #endif
 #include "Main.h"
 
 typedef struct moonParameters {
 	float radius;
+	float size;
+	float orbit;
+	int planet;
 	GLuint texture;
 	GLuint normal;
 } moonParameters;
@@ -22,6 +26,7 @@ typedef struct planetParameters {
 	float day;
 	int createAtmosphere;
 	int createRing;
+	int numMoons;
 	float ringInner;
 	float ringOuter;
 	GLuint texture;
@@ -65,7 +70,8 @@ float theta = 0.0;
 GLuint sunTexture;
 GLuint sunNormal;
 
-GLuint moonTexture;
+GLuint moonNormalTexture;
+GLuint moonDisplacementTexture;
 GLuint skyboxShader, sunShader, planetShader, atmosphereShader, ringShader;
 GLuint vertUIShader, fragUIShader, UIShader;
 GLuint vPosition, vNormal, vTangent, vBitangent;
@@ -82,15 +88,20 @@ GLfloat lastFrame = 0.0f;
 int stopRotation = 0;
 
 
+#define MAX_MOONS 21
 int numPlanets = 11;
 planetParameters planetInstanceArray[11];
 atmosphereParameters atmosphereArray[11];
+moonParameters moonInstanceArray[MAX_MOONS];
 mat4 modelMatrices[11];
 mat4 planetTransform[11];
 float orbitSpeedArray[11] = {0};
 float rotationSpeedArray[11] = {0};
+float moonOrbitSpeedArray[MAX_MOONS] = {0};
+int loadedMoonCount = 0;
 float planetScaleMult = 100.0;
 float planetRadMult = 2000.0;
+float moonRadMult = 500.0;
 // World-space radius of the sun's billboard (its on-screen size is this value
 // projected at the sun's distance, so the sun shrinks as the camera pulls
 // back). Tune larger for a bigger sun, smaller for a smaller one.
@@ -249,9 +260,100 @@ void atmosphereBuilder() {
 
 }
 
+static int fileExists(const char *path)
+{
+#ifdef _WIN32
+	return GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES;
+#else
+	struct stat st;
+	return stat(path, &st) == 0 && S_ISREG(st.st_mode);
+#endif
+}
+
+// Moons have no per-moon normal or displacement maps on disk. A neutral
+// tangent-space normal keeps shading plain (loadTexture's black 1x1 fallback
+// would remap to N = (-1,-1,-1)), and a black 1x1 displacement keeps the
+// planet shader's parallax step a no-op.
+static GLuint createNeutralNormalTexture()
+{
+	unsigned char px[3] = {128, 128, 255};
+	GLuint normalTex;
+	glGenTextures(1, &normalTex);
+	glBindTexture(GL_TEXTURE_2D, normalTex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1, 1, 0, GL_RGB, GL_UNSIGNED_BYTE, px);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	return normalTex;
+}
+
 void moonBuilder()
 {
-	moonTexture = loadTexture("include/textures/Planets/moon.jpg");
+	struct moonDef {
+		const char *name;
+		const char *path;
+		int planet;
+		float radius;
+		float size;
+		float orbit;
+	};
+
+	// Historical moon data: radius * moonRadMult, size * planetScaleMult.
+	// Only moons whose texture file exists are drawn, so dropping a file
+	// into one of these paths re-adds that moon.
+	static const struct moonDef defs[MAX_MOONS] = {
+		{ "moon",      "include/textures/Planets/moon.jpg",          2,  1.0f,       0.272704f,  0.083f     },
+		{ "phobos",    "include/textures/moons/mars/phobos.jpg",     3,  0.015609f,  0.001413f,  0.063014f  },
+		{ "deimos",    "include/textures/moons/mars/deimos.jpg",     3,  0.037919f,  0.000306f,  0.003425f  },
+		{ "callisto",  "include/textures/moons/jupiter/callisto.jpg",5,  4.883117f,  0.376707f,  0.046575f  },
+		{ "europa",    "include/textures/moons/jupiter/europa.jpg",  5,  1.742597f,  0.24329f,   0.009703f  },
+		{ "ganymede",  "include/textures/moons/jupiter/ganymede.jpg",5,  2.779221f,  0.206498f,  0.292123f  },
+		{ "io",        "include/textures/moons/jupiter/io.jpg",      5,  0.680519f,  0.142936f,  0.004849f  },
+		{ "dione",     "include/textures/moons/saturn/dione.jpg",    6,  0.98026f,   0.088134f,  0.006849f  },
+		{ "enceladus", "include/textures/moons/saturn/enceladus.jpg",6,  0.384179f,  0.024643f,  0.003753f  },
+		{ "iapetus",   "include/textures/moons/saturn/iapetus.jpg",  6,  35.224156f, 0.115461f,  0.216438f  },
+		{ "mimas",     "include/textures/moons/saturn/mimas.jpg",    6,  0.481919f,  0.010909f,  0.002581f  },
+		{ "rhea",      "include/textures/moons/saturn/rhea.jpg",     6,  1.368935f,  0.119918f,  0.012329f  },
+		{ "tethys",    "include/textures/moons/saturn/tethys.jpg",   6,  0.766234f,  0.04183f,   0.005171f  },
+		{ "titan",     "include/textures/moons/saturn/titan.png",    6,  3.173688f,  0.404175f,  0.043607f  },
+		{ "ariel",     "include/textures/moons/uranus/ariel.jpg",    7,  0.495844f,  0.0908f,    0.006545f  },
+		{ "miranda",   "include/textures/moons/uranus/miranda.jpg",  7,  0.336078f,  0.036886f,  0.003836f  },
+		{ "oberon",    "include/textures/moons/uranus/oberon.jpg",   7,  1.513247f,  0.1194f,    0.036886f  },
+		{ "titania",   "include/textures/moons/uranus/titania.jpg",  7,  1.132234f,  0.1235f,    0.023836f  },
+		{ "umbriel",   "include/textures/moons/uranus/umbriel.jpg",  7,  0.429151f,  0.091822f,  0.011342f  },
+		{ "triton",    "include/textures/moons/neptune/triton.jpg",  8,  0.921452f,  0.2122f,   -0.016101f  },
+		{ "charon",    "include/textures/moons/pluto/charon.jpg",    9,  0.045548f,  0.095f,     0.017479f  },
+	};
+
+	for(int i = 0; i < 11; i++)
+		planetInstanceArray[i].numMoons = 0;
+
+	moonNormalTexture = createNeutralNormalTexture();
+	moonDisplacementTexture = loadTexture("include/textures/Planets/moonDisplacement.png");
+
+	// defs are ordered by planet, so appending keeps each planet's moons
+	// contiguous in moonInstanceArray (drawMoon walks it sequentially)
+	for(int i = 0; i < MAX_MOONS; i++)
+	{
+		if(!fileExists(defs[i].path))
+		{
+			fprintf(stderr, "[trace] moonBuilder: skipped %s (no texture at %s)\n", defs[i].name, defs[i].path);
+			continue;
+		}
+		moonParameters m;
+		m.planet = defs[i].planet;
+		m.radius = defs[i].radius * moonRadMult;
+		m.size = defs[i].size * planetScaleMult;
+		m.orbit = defs[i].orbit;
+		m.texture = loadTexture(defs[i].path);
+		m.normal = moonNormalTexture;
+		moonInstanceArray[loadedMoonCount] = m;
+		planetInstanceArray[defs[i].planet].numMoons++;
+		loadedMoonCount++;
+	}
+	fprintf(stderr, "[trace] moonBuilder: %d/%d moons have textures\n", loadedMoonCount, MAX_MOONS);
 }
 
 // ---------------------------------------------------------------------------
@@ -915,27 +1017,31 @@ void drawMoon()
 {
 	glUseProgram(planetShader);
 	setupLighting(planetShader);
+	int c = 0;
+	for(int i = 0; i < 11; i++)
+	{
+		for(int j = 0; j < planetInstanceArray[i].numMoons; j++)
+		{
+			translation.x = (moonInstanceArray[c].radius + planetInstanceArray[i].size) * (float)cos(moonOrbitSpeedArray[c]);
+			translation.y = 0.0;
+			translation.z = (moonInstanceArray[c].radius + planetInstanceArray[i].size) * (float)sin(moonOrbitSpeedArray[c]);
 
-	translation.x = 400.0f * (float)cos(orbitSpeedArray[2]*2.0f);
-	translation.y = 0.0;
-	translation.z = 400.0f * (float)sin(orbitSpeedArray[2]*2.0f);
+			mat4 m = multiplymat4(multiplymat4(planetTransform[i], translatevec3(translation)), scale(moonInstanceArray[c].size));
 
-	mat4 m = multiplymat4(multiplymat4(planetTransform[2],translatevec3(translation)), scale(planetInstanceArray[2].size/4.0f));
+			initMVP(planetShader, m, v);
 
-	initMVP(planetShader, m, v);
-
-    glBindVertexArray (planetVAO);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, planetInstanceArray[2].texture);
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, planetInstanceArray[2].normal);
-    glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_2D, planetInstanceArray[2].displacement);
-  	glUniform1i(glGetUniformLocation(planetShader, "tex"), 0);
-    glUniform1i(glGetUniformLocation(planetShader, "normalTex"), 1);
-    glUniform1i(glGetUniformLocation(planetShader, "depthMap"), 2);
-    glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber );
-    glBindVertexArray(0);
+			glBindVertexArray (planetVAO);
+			bindTexture(GL_TEXTURE0, moonInstanceArray[c].texture);
+			bindTexture(GL_TEXTURE1, moonInstanceArray[c].normal);
+			bindTexture(GL_TEXTURE2, moonDisplacementTexture);
+			glUniform1i(glGetUniformLocation(planetShader, "tex"), 0);
+			glUniform1i(glGetUniformLocation(planetShader, "normalTex"), 1);
+			glUniform1i(glGetUniformLocation(planetShader, "depthMap"), 2);
+			glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber );
+			c++;
+		}
+	}
+	glBindVertexArray(0);
 }
 
 #ifdef _WIN32
@@ -1112,6 +1218,8 @@ int main(int argc, char *argv[])
 	sunNormal = loadTexture("include/textures/Planets/sunNormal.png");
 	fprintf(stderr, "[trace] main: planetBuilder\n");
 	planetBuilder();
+	fprintf(stderr, "[trace] main: moonBuilder\n");
+	moonBuilder();
 	fprintf(stderr, "[trace] main: atmosphereBuilder\n");
 	atmosphereBuilder();
 	fprintf(stderr, "[trace] main: init\n");
@@ -1183,6 +1291,10 @@ int main(int argc, char *argv[])
 			for(int i = 0; i < 11; i++)
 			{
 				rotationSpeedArray[i] += 0.001f/planetInstanceArray[i].day;
+			}
+			for(int i = 0; i < loadedMoonCount; i++)
+			{
+				moonOrbitSpeedArray[i] += 0.0001f/moonInstanceArray[i].orbit;
 			}
 			theta += 0.009f;
 		}
