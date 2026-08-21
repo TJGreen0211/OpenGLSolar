@@ -48,6 +48,9 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 GLuint loadShader(char *vertex_path, char *fragement_path);
+void initLoadingScreen();
+void renderLoadingScreen(float progress);
+void finishLoadingStep();
 #ifdef _WIN32
 static GLADapiproc gladGetProcAddress(const char *name);
 #endif
@@ -87,6 +90,20 @@ GLfloat deltaTime = 0.0f;
 GLfloat lastFrame = 0.0f;
 int stopRotation = 0;
 
+// Loading screen state. loadWindow is the GL context the loading frames are
+// drawn on; it is set in main() right after setupGLFW() and read by the
+// loader functions (planet/moon texture loops) so they can redraw the bar.
+GLFWwindow *loadWindow = NULL;
+GLuint loadingShader, loadingVAO, loadingVBO;
+int loadStepDone = 0;
+
+
+// Worst-case number of discrete load steps: skybox (1) + sun (2) +
+// planet textures (11x3) + moons (neutral normal 1 + displacement 1 + up to
+// MAX_MOONS textures) + atmosphere (1) + init (1) + buttons (1) + UI shader (1).
+// If some moon textures are missing the bar tops out below 100% and the final
+// frame forces it to 1.0, which is fine.
+#define LOAD_TOTAL_STEPS (1 + 2 + 33 + 2 + MAX_MOONS + 4)
 
 #define MAX_MOONS 21
 int numPlanets = 11;
@@ -135,6 +152,7 @@ int *loadPlanetTextures(int planetTexArray[])
 	for(int i = 0; i < arraySize; i++)
 	{
 		planetTexArray[i] = loadTexture(textureStrings[i]);
+		finishLoadingStep();
 	}
 	return planetTexArray;
 }
@@ -156,6 +174,7 @@ int *loadPlanetNormals(int planetTexArray[])
 	for(int i = 0; i < arraySize; i++)
 	{
 		planetTexArray[i] = loadTexture(textureStrings[i]);
+		finishLoadingStep();
 	}
 	return planetTexArray;
 }
@@ -177,6 +196,7 @@ int *loadPlanetDisplacementMap(int planetTexArray[])
 	for(int i = 0; i < arraySize; i++)
 	{
 		planetTexArray[i] = loadTexture(textureStrings[i]);
+		finishLoadingStep();
 	}
 	return planetTexArray;
 }
@@ -331,7 +351,9 @@ void moonBuilder()
 		planetInstanceArray[i].numMoons = 0;
 
 	moonNormalTexture = createNeutralNormalTexture();
+	finishLoadingStep();
 	moonDisplacementTexture = loadTexture("include/textures/Planets/moonDisplacement.png");
+	finishLoadingStep();
 
 	// defs are ordered by planet, so appending keeps each planet's moons
 	// contiguous in moonInstanceArray (drawMoon walks it sequentially)
@@ -348,6 +370,7 @@ void moonBuilder()
 		m.size = defs[i].size * planetScaleMult;
 		m.orbit = defs[i].orbit;
 		m.texture = loadTexture(defs[i].path);
+		finishLoadingStep();
 		m.normal = moonNormalTexture;
 		moonInstanceArray[loadedMoonCount] = m;
 		planetInstanceArray[defs[i].planet].numMoons++;
@@ -709,6 +732,77 @@ void initSunQuad()
 	glEnableVertexAttribArray(vPositionLoc);
 	glVertexAttribPointer(vPositionLoc, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
 	glBindVertexArray(0);
+}
+
+// ---------------------------------------------------------------------------
+// Loading screen
+//
+// Between window creation and the end of resource loading, main() decodes
+// ~60 textures with SOIL and builds all shaders/VAOs before the first buffer
+// swap, so the window sits blank and unresponsive the whole time. The screen
+// itself needs no textures (nothing is loaded yet): a plain shader fills the
+// viewport with a dark backdrop and a progress bar uProgress. redrawLoading
+// is called once per discrete load step so the bar advances while the rest of
+// the pipeline blocks, and glfwPollEvents inside it keeps the window
+// responsive (Esc works) during loading.
+// ---------------------------------------------------------------------------
+
+void initLoadingScreen()
+{
+	createShader(&loadingShader, "src/shaders/loading.vert",
+		"src/shaders/loading.frag");
+
+	GLfloat quadVertices[] = {
+		-1.0f, -1.0f, 0.0f,
+		1.0f, -1.0f, 0.0f,
+		1.0f,  1.0f, 0.0f,
+		-1.0f,  1.0f, 0.0f
+	};
+
+	glGenVertexArrays(1, &loadingVAO);
+	glBindVertexArray(loadingVAO);
+	glGenBuffers(1, &loadingVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, loadingVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+
+	GLint vPositionLoc = glGetAttribLocation(loadingShader, "vPosition");
+	glEnableVertexAttribArray(vPositionLoc);
+	glVertexAttribPointer(vPositionLoc, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+	glBindVertexArray(0);
+}
+
+void renderLoadingScreen(float progress)
+{
+	glfwPollEvents();
+
+	int fbw, fbh;
+	glfwGetFramebufferSize(loadWindow, &fbw, &fbh);
+	glViewport(0, 0, fbw, fbh);
+
+	glDisable(GL_DEPTH_TEST);
+	glClearColor(0.02f, 0.02f, 0.05f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	glUseProgram(loadingShader);
+	glUniform1f(glGetUniformLocation(loadingShader, "uProgress"), progress);
+	glUniform1f(glGetUniformLocation(loadingShader, "uTime"), (float)glfwGetTime());
+	glBindVertexArray(loadingVAO);
+	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+	glBindVertexArray(0);
+	glEnable(GL_DEPTH_TEST);
+
+	glfwSwapBuffers(loadWindow);
+}
+
+// One loading step: repaint the bar at the current fraction done. Call once
+// per discrete unit of work (each texture decode, each init phase).
+void finishLoadingStep()
+{
+	float pct = (float)loadStepDone / (float)LOAD_TOTAL_STEPS;
+	loadStepDone++;
+	if (pct > 1.0f)
+		pct = 1.0f;
+	renderLoadingScreen(pct);
 }
 
 void init()
@@ -1199,8 +1293,17 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "[trace] main: creating window\n");
 	GLFWwindow *window = setupGLFW();
 	fprintf(stderr, "[trace] main: window ready\n");
+
+	// Show the loading screen before the first blocking load, so the window
+	// never sits blank/unresponsive while textures are decoded.
+	loadWindow = window;
+	initLoadingScreen();
+	loadStepDone = 0;
+	renderLoadingScreen(0.0f);
+
 	fprintf(stderr, "[trace] main: loading skybox\n");
 	GLuint skyboxTexture = initCubemap();
+	finishLoadingStep();
 	fprintf(stderr, "[trace] main: skybox loaded\n");
 
 	//GLFWwindow* window2 = glfwCreateWindow(500, 500, "SolarSystem", NULL, NULL);
@@ -1215,25 +1318,35 @@ int main(int argc, char *argv[])
 
 	fprintf(stderr, "[trace] main: loading sun textures\n");
 	sunTexture = loadTexture("include/textures/Planets/sun2.jpg");
+	finishLoadingStep();
 	sunNormal = loadTexture("include/textures/Planets/sunNormal.png");
+	finishLoadingStep();
 	fprintf(stderr, "[trace] main: planetBuilder\n");
-	planetBuilder();
+	planetBuilder(); // steps inside its texture loops
 	fprintf(stderr, "[trace] main: moonBuilder\n");
-	moonBuilder();
+	moonBuilder(); // steps inside
 	fprintf(stderr, "[trace] main: atmosphereBuilder\n");
 	atmosphereBuilder();
+	finishLoadingStep();
 	fprintf(stderr, "[trace] main: init\n");
 	init();
+	finishLoadingStep();
 	fprintf(stderr, "[trace] main: perspective\n");
 	createPerspectiveMatrix();
 
 	initializePlanetButtons();
-	fprintf(stderr, "[trace] main: enter render loop\n");
+	finishLoadingStep();
 
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_MULTISAMPLE);
 	glCullFace(GL_BACK);
 	attachGUIShaders();
+	finishLoadingStep();
+	// Some moons may be missing on disk, so the count above can land below
+	// 100%; force one final full-bar frame before handing over to the scene.
+	renderLoadingScreen(1.0f);
+	loadWindow = NULL;
+	fprintf(stderr, "[trace] main: enter render loop\n");
 
 	float fpsFrames= 0;
 	float lastTime = 0;
