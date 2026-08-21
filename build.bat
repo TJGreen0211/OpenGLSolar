@@ -26,7 +26,7 @@ if not exist build\obj mkdir build\obj
 cl /nologo /W3 /O2 /MD /DWIN32 /DNOMINMAX /D_CRT_SECURE_NO_WARNINGS ^
   /Isrc /Iinclude /I"include\SOIL\src" /I"%GLFW_ROOT%\include" /I"%GLAD_ROOT%\include" /I"lib\include" ^
   /Fobuild\obj\ /Fecube.exe ^
-  src\Main.c src\Common.c src\LoadShader.c src\GUI.c src\LinearAlg.c src\Camera.c src\Sphere.c src\Obj.c ^
+  src\Main.c src\Common.c src\LoadShader.c src\GUI.c src\LinearAlg.c src\Camera.c src\Sphere.c src\Geometry.c src\Obj.c ^
   "%GLAD_ROOT%\src\gl.c" "include\SOIL\src\SOIL.c" "include\SOIL\src\stb_image_aug.c" "include\SOIL\src\image_helper.c" "include\SOIL\src\image_DXT.c" ^
   /link /LIBPATH:"%GLFW_ROOT%\lib-vc2022" glfw3dll.lib opengl32.lib gdi32.lib user32.lib shell32.lib winmm.lib
 if errorlevel 1 (

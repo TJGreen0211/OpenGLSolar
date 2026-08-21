@@ -13,6 +13,15 @@ void createShader(GLuint *shader, char *vert, char *frag)
     glAttachShader(*shader, vertShader);
     glAttachShader(*shader, fragShader);
     glLinkProgram(*shader);
+
+    GLint success;
+    glGetProgramiv(*shader, GL_LINK_STATUS, &success);
+    if(success == GL_FALSE)
+    {
+        char log[1024];
+        glGetProgramInfoLog(*shader, sizeof(log), 0, log);
+        fprintf(stderr, "shader link info: \n %s \n", log);
+    }
 }
 
 GLuint loadCubemap(char **faces)

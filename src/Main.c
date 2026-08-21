@@ -21,9 +21,13 @@ typedef struct planetParameters {
 	float axialTilt;
 	float day;
 	int createAtmosphere;
+	int createRing;
+	float ringInner;
+	float ringOuter;
 	GLuint texture;
 	GLuint normal;
 	GLuint displacement;
+	GLuint ringTex;
 	mat4 planetLocation;
 
 } planetParameters;
@@ -62,11 +66,13 @@ GLuint sunTexture;
 GLuint sunNormal;
 
 GLuint moonTexture;
-GLuint skyboxShader, sunShader, planetShader, atmosphereShader;
+GLuint skyboxShader, sunShader, planetShader, atmosphereShader, ringShader;
 GLuint vertUIShader, fragUIShader, UIShader;
 GLuint vPosition, vNormal, vTangent, vBitangent;
 GLuint planetVAO, planetVBO, skyboxVAO, skyboxVBO, objectVAO, objectVBO, atmosphereVAO, atmosphereVBO;
 GLuint sunQuadVAO, sunQuadVBO;
+GLuint ringVAO[11], ringVBO[11];
+ring ringArray[11];
 GLuint shadowFBO, depthMap, rboDepth;
 GLuint ModelView, projection, model, view;
 mat4 p, v;
@@ -177,27 +183,28 @@ void planetBuilder()
 	int planetDisplacementArray[11];
 	*planetDisplacementArray = *loadPlanetDisplacementMap(planetDisplacementArray);
 
-	mercury.radius = 0.4f*planetRadMult; mercury.size = 0.38f*planetScaleMult; mercury.orbit = 0.240846f; mercury.axialTilt = 0.034f; mercury.day = 58.646f; mercury.createAtmosphere = 0;
+	mercury.radius = 0.4f*planetRadMult; mercury.size = 0.38f*planetScaleMult; mercury.orbit = 0.240846f; mercury.axialTilt = 0.034f; mercury.day = 58.646f; mercury.createAtmosphere = 0; mercury.createRing = 0;
 	mercury.texture = planetTexArray[0]; mercury.normal = planetNormArray[0]; mercury.displacement = planetDisplacementArray[0];
-	venus.radius = 0.7f*planetRadMult; venus.size = 0.9499f*planetScaleMult; venus.orbit = 0.615198f; venus.axialTilt = 177.36f; venus.day = 243.025f; venus.createAtmosphere = 1;
+	venus.radius = 0.7f*planetRadMult; venus.size = 0.9499f*planetScaleMult; venus.orbit = 0.615198f; venus.axialTilt = 177.36f; venus.day = 243.025f; venus.createAtmosphere = 1; venus.createRing = 0;
 	venus.texture = planetTexArray[1]; venus.normal = planetNormArray[1]; venus.displacement = planetDisplacementArray[1];
-	earth.radius = 1.0f*planetRadMult; earth.size = 1.0f*planetScaleMult; earth.orbit = 1.0f; earth.axialTilt = 23.4392811f; earth.day = 1; earth.createAtmosphere = 1;
+	earth.radius = 1.0f*planetRadMult; earth.size = 1.0f*planetScaleMult; earth.orbit = 1.0f; earth.axialTilt = 23.4392811f; earth.day = 1; earth.createAtmosphere = 1; earth.createRing = 0;
 	earth.texture = planetTexArray[2]; earth.normal = planetNormArray[2]; earth.displacement = planetDisplacementArray[2];
-	mars.radius = 1.5f*planetRadMult; mars.size = 0.533f*planetScaleMult; mars.orbit = 1.88f; mars.axialTilt = 25.19f; mars.day = 1.025957f; mars.createAtmosphere = 1;
+	mars.radius = 1.5f*planetRadMult; mars.size = 0.533f*planetScaleMult; mars.orbit = 1.88f; mars.axialTilt = 25.19f; mars.day = 1.025957f; mars.createAtmosphere = 1; mars.createRing = 0;
 	mars.texture = planetTexArray[3]; mars.normal = planetNormArray[3]; mars.displacement = planetDisplacementArray[3];
-	ceres.radius = 2.77f*planetRadMult; ceres.size = 0.07f*planetScaleMult; ceres.orbit = 4.6f; ceres.axialTilt = 4; ceres.day = 0.3781f; ceres.createAtmosphere = 1;
+	ceres.radius = 2.77f*planetRadMult; ceres.size = 0.07f*planetScaleMult; ceres.orbit = 4.6f; ceres.axialTilt = 4; ceres.day = 0.3781f; ceres.createAtmosphere = 1; ceres.createRing = 0;
 	ceres.texture = planetTexArray[4]; ceres.normal = planetNormArray[4]; ceres.displacement = planetDisplacementArray[4];
-	jupiter.radius = 5.2f*planetRadMult; jupiter.size = 11.209f*planetScaleMult; jupiter.orbit = 11.8618f; jupiter.axialTilt = 3.13f; jupiter.day = 0.413f; jupiter.createAtmosphere = 0;
+	jupiter.radius = 5.2f*planetRadMult; jupiter.size = 11.209f*planetScaleMult; jupiter.orbit = 11.8618f; jupiter.axialTilt = 3.13f; jupiter.day = 0.413f; jupiter.createAtmosphere = 0; jupiter.createRing = 0;
 	jupiter.texture = planetTexArray[5]; jupiter.normal = planetNormArray[5]; jupiter.displacement = planetDisplacementArray[5];
-	saturn.radius = 9.5f*planetRadMult; saturn.size = 9.45f*planetScaleMult; saturn.orbit = 29.4571f; saturn.axialTilt = 26.73f; saturn.day = 0.439583f; saturn.createAtmosphere = 0;
+	// ringInner/ringOuter are the ring edges as a multiple of the planet radius
+	saturn.radius = 9.5f*planetRadMult; saturn.size = 9.45f*planetScaleMult; saturn.orbit = 29.4571f; saturn.axialTilt = 26.73f; saturn.day = 0.439583f; saturn.createAtmosphere = 0; saturn.createRing = 1; saturn.ringInner = 1.24f; saturn.ringOuter = 2.27f;
 	saturn.texture = planetTexArray[6]; saturn.normal = planetNormArray[6]; saturn.displacement = planetDisplacementArray[6];
-	uranus.radius = 19.2f*planetRadMult; uranus.size = 4.007f*planetScaleMult; uranus.orbit = 84.0205f; uranus.axialTilt = 97.77f; uranus.day = 0.71833f; uranus.createAtmosphere = 0;
+	uranus.radius = 19.2f*planetRadMult; uranus.size = 4.007f*planetScaleMult; uranus.orbit = 84.0205f; uranus.axialTilt = 97.77f; uranus.day = 0.71833f; uranus.createAtmosphere = 0; uranus.createRing = 1; uranus.ringInner = 1.55f; uranus.ringOuter = 2.05f;
 	uranus.texture = planetTexArray[7]; uranus.normal = planetNormArray[7]; uranus.displacement = planetDisplacementArray[7];
-	neptune.radius = 30.1f*planetRadMult; neptune.size = 3.883f*planetScaleMult; neptune.orbit = 164.8f; neptune.axialTilt = 28.32f; neptune.day = 0.6713f; neptune.createAtmosphere = 0;
+	neptune.radius = 30.1f*planetRadMult; neptune.size = 3.883f*planetScaleMult; neptune.orbit = 164.8f; neptune.axialTilt = 28.32f; neptune.day = 0.6713f; neptune.createAtmosphere = 0; neptune.createRing = 0;
 	neptune.texture = planetTexArray[8]; neptune.normal = planetNormArray[8]; neptune.displacement = planetDisplacementArray[8];
-	pluto.radius = 39*planetRadMult; pluto.size = 0.18f*planetScaleMult; pluto.orbit = 248; pluto.axialTilt = 119.591f; pluto.day = 6.387230f; pluto.createAtmosphere = 1;
+	pluto.radius = 39*planetRadMult; pluto.size = 0.18f*planetScaleMult; pluto.orbit = 248; pluto.axialTilt = 119.591f; pluto.day = 6.387230f; pluto.createAtmosphere = 1; pluto.createRing = 0;
 	pluto.texture = planetTexArray[9]; pluto.normal = planetNormArray[9]; pluto.displacement = planetDisplacementArray[9];
-	eris.radius = 68*planetRadMult; eris.size = 0.182f*planetScaleMult; eris.orbit = 558.04f; eris.axialTilt = 61.45f; eris.day = 1.079167f ; eris.createAtmosphere = 0;
+	eris.radius = 68*planetRadMult; eris.size = 0.182f*planetScaleMult; eris.orbit = 558.04f; eris.axialTilt = 61.45f; eris.day = 1.079167f ; eris.createAtmosphere = 0; eris.createRing = 0;
 	eris.texture = planetTexArray[10]; eris.normal = planetNormArray[10]; eris.displacement = planetDisplacementArray[10];
 
 	planetInstanceArray[0] = mercury;
@@ -245,6 +252,92 @@ void atmosphereBuilder() {
 void moonBuilder()
 {
 	moonTexture = loadTexture("include/textures/Planets/moon.jpg");
+}
+
+// ---------------------------------------------------------------------------
+// Ring textures
+//
+// The old commit loaded include/textures/Planets/saturnRing.png, which was
+// never committed. Synthesize an equivalent radial band profile instead: a
+// 512x2 RGBA strip whose RGB is the ring colour and whose A is the
+// per-radius brightness. u = 0 is the inner ring edge, u = 1 the outer one.
+// ---------------------------------------------------------------------------
+
+#define RING_TEX_WIDTH 512
+
+static float ringGaussian(float u, float c, float w)
+{
+	float d = (u - c)/w;
+	return expf(-0.5f*d*d);
+}
+
+// Saturn: D (faint inner), C, bright B, dark Cassini division, A, thin F
+static float saturnRingLuma(float u)
+{
+	float l;
+	if(u < 0.03f)      l = 0.10f;
+	else if(u < 0.20f) l = 0.28f;
+	else if(u < 0.58f) l = 0.85f;
+	else if(u < 0.66f) l = 0.14f;
+	else               l = 0.55f;
+
+	if(u > 0.895f && u < 0.915f)
+		l *= 0.25f;
+	if(u >= 0.985f)
+		l = 0.35f;
+
+	l *= 0.93f + 0.07f*sinf(u*300.0f + 1.7f)*sinf(u*77.0f);
+	return l;
+}
+
+// Uranus: very faint narrow rings, brightest = epsilon ring near u ~ 0.9
+static float uranusRingLuma(float u)
+{
+	float l = 0.03f;
+	l += 0.10f*ringGaussian(u, 0.30f, 0.015f);
+	l += 0.14f*ringGaussian(u, 0.45f, 0.020f);
+	l += 0.12f*ringGaussian(u, 0.62f, 0.012f);
+	l += 0.55f*ringGaussian(u, 0.90f, 0.012f);
+	if(l > 1.0f)
+		l = 1.0f;
+	return l;
+}
+
+static GLuint uploadRingTexture(float baseR, float baseG, float baseB, float (*luma)(float))
+{
+	unsigned char pixels[RING_TEX_WIDTH*2*4];
+
+	for(int x = 0; x < RING_TEX_WIDTH; x++)
+	{
+		float l = luma((float)x/(float)(RING_TEX_WIDTH - 1));
+		for(int y = 0; y < 2; y++)
+		{
+			unsigned char *px = &pixels[(x*2 + y)*4];
+			px[0] = (unsigned char)(baseR*255.0f);
+			px[1] = (unsigned char)(baseG*255.0f);
+			px[2] = (unsigned char)(baseB*255.0f);
+			px[3] = (unsigned char)(l*255.0f);
+		}
+	}
+
+	GLuint textureID;
+	glGenTextures(1, &textureID);
+	glBindTexture(GL_TEXTURE_2D, textureID);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, RING_TEX_WIDTH, 2, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	return textureID;
+}
+
+// planetInstanceArray order from planetBuilder(): 6 = saturn, 7 = uranus
+static GLuint generateRingTexture(int planetIndex)
+{
+	if(planetIndex == 6)
+		return uploadRingTexture(0.93f, 0.85f, 0.70f, saturnRingLuma);
+	return uploadRingTexture(0.65f, 0.75f, 0.88f, uranusRingLuma);
 }
 
 vec3 *generateTangents(int vertexNumber, vec3 *points, vec3 *tangent)
@@ -353,6 +446,43 @@ void initPlanet() {
 
 	free(tangent);
 	free(vna);
+}
+
+void initPlanetRing()
+{
+	createShader(&ringShader, "src/shaders/ring.vert",
+		"src/shaders/ring.frag");
+
+	for(int i = 0; i < 11; i++)
+	{
+		if(!planetInstanceArray[i].createRing)
+			continue;
+
+		planetInstanceArray[i].ringTex = generateRingTexture(i);
+		ringArray[i] = createRing(128, planetInstanceArray[i].ringInner, planetInstanceArray[i].ringOuter);
+
+		glGenVertexArrays(1, &ringVAO[i]);
+		glBindVertexArray(ringVAO[i]);
+		glGenBuffers(1, &ringVBO[i]);
+		glBindBuffer(GL_ARRAY_BUFFER, ringVBO[i]);
+		glBufferData(GL_ARRAY_BUFFER, ringArray[i].size + ringArray[i].nsize + ringArray[i].texsize, NULL, GL_STATIC_DRAW);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, ringArray[i].size, ringArray[i].points);
+		glBufferSubData(GL_ARRAY_BUFFER, ringArray[i].size, ringArray[i].nsize, ringArray[i].normals);
+		glBufferSubData(GL_ARRAY_BUFFER, ringArray[i].size + ringArray[i].nsize, ringArray[i].texsize, ringArray[i].texCoords);
+
+		GLint aPosition = glGetAttribLocation(ringShader, "vPosition");
+		glEnableVertexAttribArray(aPosition);
+		glVertexAttribPointer(aPosition, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(0));
+
+		GLint aNormal = glGetAttribLocation(ringShader, "vNormal");
+		glEnableVertexAttribArray(aNormal);
+		glVertexAttribPointer(aNormal, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(ringArray[i].size));
+
+		GLint aTexture = glGetAttribLocation(ringShader, "vTexture");
+		glEnableVertexAttribArray(aTexture);
+		glVertexAttribPointer(aTexture, 2, GL_FLOAT, GL_FALSE, 2*sizeof(GLfloat), BUFFER_OFFSET(ringArray[i].size + ringArray[i].nsize));
+		glBindVertexArray(0);
+	}
 }
 
 void initAtmosphere() {
@@ -492,6 +622,8 @@ void init()
     initFramebuffer();
     fprintf(stderr, "[trace] init: initPlanet\n");
     initPlanet();
+	fprintf(stderr, "[trace] init: planetRing\n");
+	initPlanetRing();
 	fprintf(stderr, "[trace] init: skybox\n");
 	initSkybox();
 	fprintf(stderr, "[trace] init: object\n");
@@ -739,6 +871,44 @@ void drawPlanet()
     	glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber);
     	glBindVertexArray(0);
     }
+}
+
+void drawPlanetRing()
+{
+	glUseProgram(ringShader);
+
+	for(int i = 0; i < 11; i++)
+	{
+		if(planetInstanceArray[i].createRing) {
+			// Additive glow like the atmosphere, but alpha-weighted so the band
+			// gaps (e.g. the Cassini division) show the planet through. Depth
+			// is tested but not written: the planet drawn earlier already hides
+			// the far ring, and the ring is a pure overlay in front of it.
+			glEnable(GL_BLEND);
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+			glDisable(GL_CULL_FACE);
+			glDepthMask(GL_FALSE);
+
+			mat4 modelmat = planetTransform[i];
+			mat4 m = multiplymat4(multiplymat4(modelmat, rotateX(planetInstanceArray[i].axialTilt+45.0f)),
+				scale(planetInstanceArray[i].size));
+
+			initMVP(ringShader, m, v);
+			glUniform3f(glGetUniformLocation(ringShader, "planetCenter"),
+				modelmat.m[0][3], modelmat.m[1][3], modelmat.m[2][3]);
+			glUniform1f(glGetUniformLocation(ringShader, "planetRadius"), planetInstanceArray[i].size);
+
+			glBindVertexArray(ringVAO[i]);
+			bindTexture(GL_TEXTURE0, planetInstanceArray[i].ringTex);
+			glUniform1i(glGetUniformLocation(ringShader, "tex"), 0);
+			glDrawArrays( GL_TRIANGLES, 0, ringArray[i].vertexNumber);
+			glBindVertexArray(0);
+
+			glEnable(GL_CULL_FACE);
+			glDisable(GL_BLEND);
+			glDepthMask(GL_TRUE);
+		}
+	}
 }
 
 void drawMoon()
@@ -992,6 +1162,7 @@ int main(int argc, char *argv[])
 		// that orbits behind it (a closer planet still draws over the disc).
 		drawSunDisc();
 		drawPlanet();
+		drawPlanetRing();
 		//glFrontFace(GL_CW);
 		drawAtmosphere();
 		//glFrontFace(GL_CCW);
@@ -1021,6 +1192,18 @@ int main(int argc, char *argv[])
 
 	glDeleteVertexArrays(1, &planetVAO);
     glDeleteBuffers(1, &planetVBO);
+    for(int i = 0; i < 11; i++)
+    {
+    	if(planetInstanceArray[i].createRing)
+    	{
+			glDeleteVertexArrays(1, &ringVAO[i]);
+			glDeleteBuffers(1, &ringVBO[i]);
+			free(ringArray[i].points);
+			free(ringArray[i].normals);
+			free(ringArray[i].texCoords);
+			glDeleteTextures(1, &planetInstanceArray[i].ringTex);
+		}
+	}
 
 	glfwTerminate();
 	return 0;
