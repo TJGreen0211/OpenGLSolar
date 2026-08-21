@@ -80,9 +80,9 @@ obj ObjLoadModel(char *fname)
 			fscanf(fp, "%d", &ix);
 			fscanf(fp, "%d", &iy);
 			fscanf(fp, "%d", &iz);
-			faces[j].x = ix;
-			faces[j].y = iy;
-			faces[j].z = iz;
+			faces[j].x = (float)ix;
+			faces[j].y = (float)iy;
+			faces[j].z = (float)iz;
 			//printf("%f, %f, %f\n", faces[j].x, faces[j].y, faces[j].z);
 			j++;
 		}
@@ -101,9 +101,9 @@ obj ObjLoadModel(char *fname)
 	
 	for(int i = 0; i < faceCount; i++)
 	{
-		a = faces[i].x-1;
-		b = faces[i].y-1;
-		c = faces[i].z-1;
+		a = (int)(faces[i].x-1);
+		b = (int)(faces[i].y-1);
+		c = (int)(faces[i].z-1);
 		
 		one.x = verts[b].x - verts[a].x;
 		one.y = verts[b].y - verts[a].y;

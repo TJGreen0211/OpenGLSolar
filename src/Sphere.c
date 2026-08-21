@@ -29,9 +29,9 @@ vec3 unitCircle(vec3 p)
 	vec3 t = {0.0, 0.0, 0.0};
 	if(length > 0)
 	{
-		t.x = p.x / sqrt(length);
-		t.y = p.y / sqrt(length);
-		t.z = p.z / sqrt(length);
+		t.x = p.x / sqrtf(length);
+		t.y = p.y / sqrtf(length);
+		t.z = p.z / sqrtf(length);
 	}
 	return t;
 }
@@ -55,7 +55,7 @@ void divideTriangle(vec3 a, vec3 b, vec3 c, int count)
 sphere tetrahedron(int count)
 {
 	NumTimesToSubdivide = count;
-	NumTriangles = pow(4, count+1);
+	NumTriangles = (int)pow(4, count+1);
 	NumVertices = 3 * NumTriangles;
 	
 	int mallocVertSize = NumVertices*sizeof(vec3);
@@ -65,10 +65,10 @@ sphere tetrahedron(int count)
 	newSphere.normals = malloc(mallocNormSize);
 	
 	vec3 v[4] = {
-		{ 0.0, 0.0, 1.0 },
-		{ 0.0, 0.942809, -0.333333},
-		{ -0.816497, -0.471405, -0.333333 },
-		{ 0.816497, -0.471405, -0.333333 }
+		{ 0.0f, 0.0f, 1.0f },
+		{ 0.0f, 0.942809f, -0.333333f},
+		{ -0.816497f, -0.471405f, -0.333333f },
+		{ 0.816497f, -0.471405f, -0.333333f }
     };
     
     divideTriangle( v[0], v[1], v[2], count );

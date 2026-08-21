@@ -1,7 +1,7 @@
 #include "Camera.h"
 #include <math.h>
 
-const float toRadians = M_PI / 180.0f;
+const float toRadians = (float)(M_PI / 180.0f);
 
 #define ARCBALL_RADIUS 1.0f
 

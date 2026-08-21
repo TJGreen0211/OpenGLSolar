@@ -1,4 +1,3 @@
-#include "Main.h"
 #include <stdio.h>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -7,6 +6,7 @@
 #else
 #include <unistd.h>
 #endif
+#include "Main.h"
 
 typedef struct moonParameters {
 	float radius;
@@ -40,7 +40,7 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 GLuint loadShader(char *vertex_path, char *fragement_path);
 #ifdef _WIN32
-static void *gladGetProcAddress(const char *name);
+static GLADapiproc gladGetProcAddress(const char *name);
 #endif
 
 int mousePosX, mousePosY;
@@ -177,27 +177,27 @@ void planetBuilder()
 	int planetDisplacementArray[11];
 	*planetDisplacementArray = *loadPlanetDisplacementMap(planetDisplacementArray);
 
-	mercury.radius = 0.4*planetRadMult; mercury.size = 0.38*planetScaleMult; mercury.orbit = 0.240846; mercury.axialTilt = 0.034; mercury.day = 58.646; mercury.createAtmosphere = 0;
+	mercury.radius = 0.4f*planetRadMult; mercury.size = 0.38f*planetScaleMult; mercury.orbit = 0.240846f; mercury.axialTilt = 0.034f; mercury.day = 58.646f; mercury.createAtmosphere = 0;
 	mercury.texture = planetTexArray[0]; mercury.normal = planetNormArray[0]; mercury.displacement = planetDisplacementArray[0];
-	venus.radius = 0.7*planetRadMult; venus.size = 0.9499*planetScaleMult; venus.orbit = 0.615198; venus.axialTilt = 177.36; venus.day = 243.025; venus.createAtmosphere = 1;
+	venus.radius = 0.7f*planetRadMult; venus.size = 0.9499f*planetScaleMult; venus.orbit = 0.615198f; venus.axialTilt = 177.36f; venus.day = 243.025f; venus.createAtmosphere = 1;
 	venus.texture = planetTexArray[1]; venus.normal = planetNormArray[1]; venus.displacement = planetDisplacementArray[1];
-	earth.radius = 1.0*planetRadMult; earth.size = 1.0*planetScaleMult; earth.orbit = 1.0; earth.axialTilt = 23.4392811; earth.day = 1; earth.createAtmosphere = 1;
+	earth.radius = 1.0f*planetRadMult; earth.size = 1.0f*planetScaleMult; earth.orbit = 1.0f; earth.axialTilt = 23.4392811f; earth.day = 1; earth.createAtmosphere = 1;
 	earth.texture = planetTexArray[2]; earth.normal = planetNormArray[2]; earth.displacement = planetDisplacementArray[2];
-	mars.radius = 1.5*planetRadMult; mars.size = 0.533*planetScaleMult; mars.orbit = 1.88; mars.axialTilt = 25.19; mars.day = 1.025957; mars.createAtmosphere = 1;
+	mars.radius = 1.5f*planetRadMult; mars.size = 0.533f*planetScaleMult; mars.orbit = 1.88f; mars.axialTilt = 25.19f; mars.day = 1.025957f; mars.createAtmosphere = 1;
 	mars.texture = planetTexArray[3]; mars.normal = planetNormArray[3]; mars.displacement = planetDisplacementArray[3];
-	ceres.radius = 2.77*planetRadMult; ceres.size = 0.07*planetScaleMult; ceres.orbit = 4.6; ceres.axialTilt = 4; ceres.day = 0.3781; ceres.createAtmosphere = 1;
+	ceres.radius = 2.77f*planetRadMult; ceres.size = 0.07f*planetScaleMult; ceres.orbit = 4.6f; ceres.axialTilt = 4; ceres.day = 0.3781f; ceres.createAtmosphere = 1;
 	ceres.texture = planetTexArray[4]; ceres.normal = planetNormArray[4]; ceres.displacement = planetDisplacementArray[4];
-	jupiter.radius = 5.2*planetRadMult; jupiter.size = 11.209*planetScaleMult; jupiter.orbit = 11.8618; jupiter.axialTilt = 3.13; jupiter.day = 0.413; jupiter.createAtmosphere = 0;
+	jupiter.radius = 5.2f*planetRadMult; jupiter.size = 11.209f*planetScaleMult; jupiter.orbit = 11.8618f; jupiter.axialTilt = 3.13f; jupiter.day = 0.413f; jupiter.createAtmosphere = 0;
 	jupiter.texture = planetTexArray[5]; jupiter.normal = planetNormArray[5]; jupiter.displacement = planetDisplacementArray[5];
-	saturn.radius = 9.5*planetRadMult; saturn.size = 9.45*planetScaleMult; saturn.orbit = 29.4571; saturn.axialTilt = 26.73; saturn.day = 0.439583; saturn.createAtmosphere = 0;
+	saturn.radius = 9.5f*planetRadMult; saturn.size = 9.45f*planetScaleMult; saturn.orbit = 29.4571f; saturn.axialTilt = 26.73f; saturn.day = 0.439583f; saturn.createAtmosphere = 0;
 	saturn.texture = planetTexArray[6]; saturn.normal = planetNormArray[6]; saturn.displacement = planetDisplacementArray[6];
-	uranus.radius = 19.2*planetRadMult; uranus.size = 4.007*planetScaleMult; uranus.orbit = 84.0205; uranus.axialTilt = 97.77; uranus.day = 0.71833; uranus.createAtmosphere = 0;
+	uranus.radius = 19.2f*planetRadMult; uranus.size = 4.007f*planetScaleMult; uranus.orbit = 84.0205f; uranus.axialTilt = 97.77f; uranus.day = 0.71833f; uranus.createAtmosphere = 0;
 	uranus.texture = planetTexArray[7]; uranus.normal = planetNormArray[7]; uranus.displacement = planetDisplacementArray[7];
-	neptune.radius = 30.1*planetRadMult; neptune.size = 3.883*planetScaleMult; neptune.orbit = 164.8; neptune.axialTilt = 28.32; neptune.day = 0.6713; neptune.createAtmosphere = 0;
+	neptune.radius = 30.1f*planetRadMult; neptune.size = 3.883f*planetScaleMult; neptune.orbit = 164.8f; neptune.axialTilt = 28.32f; neptune.day = 0.6713f; neptune.createAtmosphere = 0;
 	neptune.texture = planetTexArray[8]; neptune.normal = planetNormArray[8]; neptune.displacement = planetDisplacementArray[8];
-	pluto.radius = 39*planetRadMult; pluto.size = 0.18*planetScaleMult; pluto.orbit = 248; pluto.axialTilt = 119.591; pluto.day = 6.387230; pluto.createAtmosphere = 1;
+	pluto.radius = 39*planetRadMult; pluto.size = 0.18f*planetScaleMult; pluto.orbit = 248; pluto.axialTilt = 119.591f; pluto.day = 6.387230f; pluto.createAtmosphere = 1;
 	pluto.texture = planetTexArray[9]; pluto.normal = planetNormArray[9]; pluto.displacement = planetDisplacementArray[9];
-	eris.radius = 68*planetRadMult; eris.size = 0.182*planetScaleMult; eris.orbit = 558.04; eris.axialTilt = 61.45; eris.day = 1.079167 ; eris.createAtmosphere = 0;
+	eris.radius = 68*planetRadMult; eris.size = 0.182f*planetScaleMult; eris.orbit = 558.04f; eris.axialTilt = 61.45f; eris.day = 1.079167f ; eris.createAtmosphere = 0;
 	eris.texture = planetTexArray[10]; eris.normal = planetNormArray[10]; eris.displacement = planetDisplacementArray[10];
 
 	planetInstanceArray[0] = mercury;
@@ -216,17 +216,17 @@ void planetBuilder()
 
 void atmosphereBuilder() {
 	atmosphereParameters mercury, venus, earth, mars, eris, jupiter, saturn, uranus, neptune, pluto, ceres;
-	mercury.scaleFactor = 1.000;mercury.E = 14.3; 	mercury.C_R.x = 0.3; 	mercury.C_R.y = 0.7; 	mercury.C_R.z = 1.0;
-	venus.scaleFactor = 1.3008; venus.E = 14.3; 	venus.C_R.x = 0.3; 	venus.C_R.y = 0.7; 	venus.C_R.z = 1.0;
-	earth.scaleFactor = 1.0212; earth.E = 14.3; 	earth.C_R.x = 0.3; 	earth.C_R.y = 0.7; 	earth.C_R.z = 1.0;
-	mars.scaleFactor = 1.0210; 	mars.E = 14.3; 		mars.C_R.x = 0.3; 	mars.C_R.y = 0.7; 	mars.C_R.z = 1.0;
-	eris.scaleFactor = 1.001; 	eris.E = 14.3; 		eris.C_R.x = 0.3; 	eris.C_R.y = 0.7; 	eris.C_R.z = 1.0;
-	jupiter.scaleFactor = 1.1448;jupiter.E = 14.3; 	jupiter.C_R.x = 0.3; 	jupiter.C_R.y = 0.7; 	jupiter.C_R.z = 1.0;
-	saturn.scaleFactor = 0.0; 	saturn.E = 14.3; 	saturn.C_R.x = 0.3; 	saturn.C_R.y = 0.7; 	saturn.C_R.z = 1.0;
-	uranus.scaleFactor = 0.0; 	uranus.E = 14.3; 	uranus.C_R.x = 0.3; 	uranus.C_R.y = 0.7; 	uranus.C_R.z = 1.0;
-	neptune.scaleFactor = 0.0; 	neptune.E = 14.3; 	neptune.C_R.x = 0.3; 	neptune.C_R.y = 0.7; 	neptune.C_R.z = 1.0;
-	pluto.scaleFactor = 3.5000; pluto.E = 14.3; 	pluto.C_R.x = 0.3; 	pluto.C_R.y = 0.7; 	pluto.C_R.z = 1.0;
-	ceres.scaleFactor = 0.0; 	ceres.E = 14.3;		ceres.C_R.x = 0.3; 	ceres.C_R.y = 0.7; 	ceres.C_R.z = 1.0;
+	mercury.scaleFactor = 1.000f;mercury.E = 14.3f; 	mercury.C_R.x = 0.3f; 	mercury.C_R.y = 0.7f; 	mercury.C_R.z = 1.0f;
+	venus.scaleFactor = 1.3008f; venus.E = 14.3f; 	venus.C_R.x = 0.3f; 	venus.C_R.y = 0.7f; 	venus.C_R.z = 1.0f;
+	earth.scaleFactor = 1.0212f; earth.E = 14.3f; 	earth.C_R.x = 0.3f; 	earth.C_R.y = 0.7f; 	earth.C_R.z = 1.0f;
+	mars.scaleFactor = 1.0210f; 	mars.E = 14.3f; 		mars.C_R.x = 0.3f; 	mars.C_R.y = 0.7f; 	mars.C_R.z = 1.0f;
+	eris.scaleFactor = 1.001f; 	eris.E = 14.3f; 		eris.C_R.x = 0.3f; 	eris.C_R.y = 0.7f; 	eris.C_R.z = 1.0f;
+	jupiter.scaleFactor = 1.1448f;jupiter.E = 14.3f; 	jupiter.C_R.x = 0.3f; 	jupiter.C_R.y = 0.7f; 	jupiter.C_R.z = 1.0f;
+	saturn.scaleFactor = 0.0f; 	saturn.E = 14.3f; 	saturn.C_R.x = 0.3f; 	saturn.C_R.y = 0.7f; 	saturn.C_R.z = 1.0f;
+	uranus.scaleFactor = 0.0f; 	uranus.E = 14.3f; 	uranus.C_R.x = 0.3f; 	uranus.C_R.y = 0.7f; 	uranus.C_R.z = 1.0f;
+	neptune.scaleFactor = 0.0f; 	neptune.E = 14.3f; 	neptune.C_R.x = 0.3f; 	neptune.C_R.y = 0.7f; 	neptune.C_R.z = 1.0f;
+	pluto.scaleFactor = 3.5000f; pluto.E = 14.3f; 	pluto.C_R.x = 0.3f; 	pluto.C_R.y = 0.7f; 	pluto.C_R.z = 1.0f;
+	ceres.scaleFactor = 0.0f; 	ceres.E = 14.3f;		ceres.C_R.x = 0.3f; 	ceres.C_R.y = 0.7f; 	ceres.C_R.z = 1.0f;
 
 	atmosphereArray[0] = mercury;
 	atmosphereArray[1] = venus;
@@ -510,15 +510,15 @@ void createPerspectiveMatrix()
 
 void setupLighting(int program)
 {
-    vec4 light_ambient = {0.2, 0.2, 0.2, 1.0};
-    vec4 light_diffuse = {1.0, 1.0, 1.0, 1.0};
-    vec4 light_specular = {1.0, 1.0, 1.0, 1.0};
+    vec4 light_ambient = {0.2f, 0.2f, 0.2f, 1.0f};
+    vec4 light_diffuse = {1.0f, 1.0f, 1.0f, 1.0f};
+    vec4 light_specular = {1.0f, 1.0f, 1.0f, 1.0f};
 
-    vec4 material_ambient = {0.2, 0.2, 1.0, 1.0};
-    vec4 material_diffuse = {0.8, 0.8, 0.8, 1.0};
-    vec4 material_specular = {0.5, 0.5, 0.5, 1.0};
+    vec4 material_ambient = {0.2f, 0.2f, 1.0f, 1.0f};
+    vec4 material_diffuse = {0.8f, 0.8f, 0.8f, 1.0f};
+    vec4 material_specular = {0.5f, 0.5f, 0.5f, 1.0f};
 
-    vec4 light_position = {0.0, 0.0, 1.0, 1.0};
+    vec4 light_position = {0.0f, 0.0f, 1.0f, 1.0f};
     float material_shininess = 50.0f;
 
     vec4 ambient_product = multiplyvec4(light_ambient, material_ambient);
@@ -587,7 +587,7 @@ static void setupSunUniforms(GLfloat uDisc)
 	glUniformMatrix4fv(glGetUniformLocation( sunShader, "projection" ), 1, GL_FALSE, &p.m[0][0]);
 	glUniformMatrix4fv(glGetUniformLocation( sunShader, "view" ), 1, GL_FALSE, &v.m[0][0]);
 	glUniform1f(glGetUniformLocation(sunShader, "sunRadius"), SUN_GLOW_RADIUS);
-	glUniform1f(glGetUniformLocation(sunShader, "systemTime"), glfwGetTime());
+	glUniform1f(glGetUniformLocation(sunShader, "systemTime"), (float)glfwGetTime());
 
 	int viewport[4];
 	glGetIntegerv(GL_VIEWPORT, viewport);
@@ -677,15 +677,15 @@ void drawAtmosphere()
 			mat4 m = multiplymat4(modelmat, scale(planetInstanceArray[i].size*scaleFactor));
 			// 1/lambda^4 for lambda = (0.3, 0.7, 1.0) um, normalized so blue = 1
 			// vec3 C_R = {1.0, 0.0337, 0.0081};
-			vec3 C_R = {0.3, 0.7, 1.0};
-			float E = 14.3;
+			vec3 C_R = {0.3f, 0.7f, 1.0f};
+			float E = 14.3f;
 
 			glUniform1f(glGetUniformLocation(atmosphereShader, "fInnerRadius"), fInner);
 			glUniform1f(glGetUniformLocation(atmosphereShader, "fOuterRadius"), fOuter);
 			glUniform3f(glGetUniformLocation(atmosphereShader, "camPosition"), camPosition.x, camPosition.y, camPosition.z);
 			glUniform3f(glGetUniformLocation(atmosphereShader, "C_R"), C_R.x, C_R.y, C_R.z);
 			glUniform1f(glGetUniformLocation(atmosphereShader, "E"), E);
-			glUniform1f(glGetUniformLocation(atmosphereShader, "time"), glfwGetTime());
+			glUniform1f(glGetUniformLocation(atmosphereShader, "time"), (float)glfwGetTime());
 
 			initMVP(atmosphereShader, m, v);
 
@@ -718,11 +718,11 @@ void drawPlanet()
 	setupLighting(planetShader);
 	for(int i = 0; i < 11; i++)
 	{
-		translation.x = planetInstanceArray[i].radius * cos(orbitSpeedArray[i]);
+		translation.x = planetInstanceArray[i].radius * (float)cos(orbitSpeedArray[i]);
 		translation.y = 0.0;
-		translation.z = planetInstanceArray[i].radius * sin(orbitSpeedArray[i]);
+		translation.z = planetInstanceArray[i].radius * (float)sin(orbitSpeedArray[i]);
 		mat4 matT = multiplymat4(translatevec3(translation), scale(planetInstanceArray[i].size));
-		mat4 matR = multiplymat4(rotateY(rotationSpeedArray[i]), rotateX(planetInstanceArray[i].axialTilt+45.0));
+		mat4 matR = multiplymat4(rotateY(rotationSpeedArray[i]), rotateX(planetInstanceArray[i].axialTilt+45.0f));
 		mat4 m = multiplymat4(matT,matR);
 		planetTransform[i] = translatevec3(translation);
 
@@ -746,11 +746,11 @@ void drawMoon()
 	glUseProgram(planetShader);
 	setupLighting(planetShader);
 
-	translation.x = 400.0 * cos(orbitSpeedArray[2]*2.0);
+	translation.x = 400.0f * (float)cos(orbitSpeedArray[2]*2.0f);
 	translation.y = 0.0;
-	translation.z = 400.0 * sin(orbitSpeedArray[2]*2.0);
+	translation.z = 400.0f * (float)sin(orbitSpeedArray[2]*2.0f);
 
-	mat4 m = multiplymat4(multiplymat4(planetTransform[2],translatevec3(translation)), scale(planetInstanceArray[2].size/4.0));
+	mat4 m = multiplymat4(multiplymat4(planetTransform[2],translatevec3(translation)), scale(planetInstanceArray[2].size/4.0f));
 
 	initMVP(planetShader, m, v);
 
@@ -769,11 +769,11 @@ void drawMoon()
 }
 
 #ifdef _WIN32
-static void *gladGetProcAddress(const char *name)
+static GLADapiproc gladGetProcAddress(const char *name)
 {
-	void *p = (void *)wglGetProcAddress(name);
+	GLADapiproc p = (GLADapiproc)wglGetProcAddress(name);
 	if (!p)
-		p = (void *)GetProcAddress(GetModuleHandleA("opengl32.dll"), name);
+		p = (GLADapiproc)GetProcAddress(GetModuleHandleA("opengl32.dll"), name);
 	return p;
 }
 #endif
@@ -907,7 +907,7 @@ int main(int argc, char *argv[])
 				break;
 			}
 		}
-		chdir(exePath);
+		_chdir(exePath);
 	}
 #endif
 	{
@@ -961,7 +961,7 @@ int main(int argc, char *argv[])
 	float lastTime = 0;
 	while(!glfwWindowShouldClose(window))
 	{
-		GLfloat currentFrame = glfwGetTime();
+		GLfloat currentFrame = (float)glfwGetTime();
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
         v = getViewMatrix();
@@ -1007,13 +1007,13 @@ int main(int argc, char *argv[])
 		if(stopRotation == 0){
 			for(int i = 0; i < 11; i++)
 			{
-				orbitSpeedArray[i] += 0.001/planetInstanceArray[i].orbit;
+				orbitSpeedArray[i] += 0.001f/planetInstanceArray[i].orbit;
 			}
 			for(int i = 0; i < 11; i++)
 			{
-				rotationSpeedArray[i] += 0.001/planetInstanceArray[i].day;
+				rotationSpeedArray[i] += 0.001f/planetInstanceArray[i].day;
 			}
-			theta += 0.009;
+			theta += 0.009f;
 		}
 
 		glfwSwapBuffers(window);
@@ -1068,10 +1068,10 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 	int state = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT);
 	if (state == GLFW_PRESS)
 	{
-		processMouseMovement(window, xpos, ypos);
+		processMouseMovement(window, (float)xpos, (float)ypos);
 	}
-	mousePosX = xpos;
-	mousePosY = ypos;
+	mousePosX = (int)xpos;
+	mousePosY = (int)ypos;
 }
 
 void checkButtonPress(imgButton b)

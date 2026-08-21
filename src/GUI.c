@@ -64,11 +64,11 @@ void drawButton(imgButton b) {
 }
 
 float *changeCoordinates(float posx, float posy, float size, float array[]) {
-	float oglCoordx = ((posx/1400.0)*2.0 - 1.0);
-	float oglCoordy = (posy/800.0)*2.0 - 1.0;
+	float oglCoordx = ((posx/1400.0f)*2.0f - 1.0f);
+	float oglCoordy = (posy/800.0f)*2.0f - 1.0f;
 	
-	float oglpx = ((posx-size)/1400.0)*2.0-1.0;
-	float oglpy = (((posy-size)/800.0)*2.0-1.0);
+	float oglpx = ((posx-size)/1400.0f)*2.0f-1.0f;
+	float oglpy = (((posy-size)/800.0f)*2.0f-1.0f);
 	
 	float a1[] = {
 		oglCoordx,  oglCoordy, 0.0f, 	1.0f, 1.0f, // Top Right
