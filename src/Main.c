@@ -255,7 +255,7 @@ void planetBuilder()
 	mars.texture = planetTexArray[3]; mars.normal = planetNormArray[3]; mars.displacement = planetDisplacementArray[3];
 	ceres.radius = 2.77f*planetRadMult; ceres.size = 0.07f*planetScaleMult; ceres.orbit = 4.6f; ceres.axialTilt = 4; ceres.day = 0.3781f; ceres.createAtmosphere = 1; ceres.createRing = 0;
 	ceres.texture = planetTexArray[4]; ceres.normal = planetNormArray[4]; ceres.displacement = planetDisplacementArray[4];
-	jupiter.radius = 5.2f*planetRadMult; jupiter.size = 11.209f*planetScaleMult; jupiter.orbit = 11.8618f; jupiter.axialTilt = 3.13f; jupiter.day = 0.413f; jupiter.createAtmosphere = 0; jupiter.createRing = 0;
+	jupiter.radius = 5.2f*planetRadMult; jupiter.size = 11.209f*planetScaleMult; jupiter.orbit = 11.8618f; jupiter.axialTilt = 3.13f; jupiter.day = 0.413f; jupiter.createAtmosphere = 1; jupiter.createRing = 0;
 	jupiter.texture = planetTexArray[5]; jupiter.normal = planetNormArray[5]; jupiter.displacement = planetDisplacementArray[5];
 	// ringInner/ringOuter are the ring edges as a multiple of the planet radius
 	saturn.radius = 9.5f*planetRadMult; saturn.size = 9.45f*planetScaleMult; saturn.orbit = 29.4571f; saturn.axialTilt = 26.73f; saturn.day = 0.439583f; saturn.createAtmosphere = 0; saturn.createRing = 1; saturn.ringInner = 1.24f; saturn.ringOuter = 2.27f;
@@ -266,7 +266,7 @@ void planetBuilder()
 	neptune.texture = planetTexArray[8]; neptune.normal = planetNormArray[8]; neptune.displacement = planetDisplacementArray[8];
 	pluto.radius = 39*planetRadMult; pluto.size = 0.18f*planetScaleMult; pluto.orbit = 248; pluto.axialTilt = 119.591f; pluto.day = 6.387230f; pluto.createAtmosphere = 1; pluto.createRing = 0;
 	pluto.texture = planetTexArray[9]; pluto.normal = planetNormArray[9]; pluto.displacement = planetDisplacementArray[9];
-	eris.radius = 68*planetRadMult; eris.size = 0.182f*planetScaleMult; eris.orbit = 558.04f; eris.axialTilt = 61.45f; eris.day = 1.079167f ; eris.createAtmosphere = 0; eris.createRing = 0;
+	eris.radius = 68*planetRadMult; eris.size = 0.182f*planetScaleMult; eris.orbit = 558.04f; eris.axialTilt = 61.45f; eris.day = 1.079167f ; eris.createAtmosphere = 1; eris.createRing = 0;
 	eris.texture = planetTexArray[10]; eris.normal = planetNormArray[10]; eris.displacement = planetDisplacementArray[10];
 
 	planetInstanceArray[0] = mercury;
@@ -285,17 +285,34 @@ void planetBuilder()
 
 void atmosphereBuilder() {
 	atmosphereParameters mercury, venus, earth, mars, eris, jupiter, saturn, uranus, neptune, pluto, ceres;
+
+	// E   : solar brightness fed to the O'Neil in-scatter integral. Earth = 14.3
+	//       is the reference; the rest scale by inverse-square solar flux
+	//       (1/d_AU^2) so inner planets glow hotter and outer ones dimmer.
+	// C_R : Rayleigh tint (the K_R*C_R term; the white Mie term is summed on top),
+	//       so each limb's hue follows C_R's RGB ratios. Earth = sky-blue.
+	// Only bodies flagged createAtmosphere draw a shell; the rest keep defaults.
 	mercury.scaleFactor = 1.000f;mercury.E = 14.3f; 	mercury.C_R.x = 0.3f; 	mercury.C_R.y = 0.7f; 	mercury.C_R.z = 1.0f;
-	venus.scaleFactor = 1.3008f; venus.E = 14.3f; 	venus.C_R.x = 0.3f; 	venus.C_R.y = 0.7f; 	venus.C_R.z = 1.0f;
+	// Dense CO2 over H2SO4 cloud decks -> warm cream; ~1.9x Earth's solar flux.
+	venus.scaleFactor = 1.3008f; venus.E = 27.3f; 	venus.C_R.x = 1.0f; 	venus.C_R.y = 0.86f; 	venus.C_R.z = 0.66f;
+	// N2/O2 Rayleigh blue -- the reference set (leave as-is).
 	earth.scaleFactor = 1.0212f; earth.E = 14.3f; 	earth.C_R.x = 0.3f; 	earth.C_R.y = 0.7f; 	earth.C_R.z = 1.0f;
-	mars.scaleFactor = 1.0210f; 	mars.E = 14.3f; 		mars.C_R.x = 0.3f; 	mars.C_R.y = 0.7f; 	mars.C_R.z = 1.0f;
-	eris.scaleFactor = 1.001f; 	eris.E = 14.3f; 		eris.C_R.x = 0.3f; 	eris.C_R.y = 0.7f; 	eris.C_R.z = 1.0f;
-	jupiter.scaleFactor = 1.1448f;jupiter.E = 14.3f; 	jupiter.C_R.x = 0.3f; 	jupiter.C_R.y = 0.7f; 	jupiter.C_R.z = 1.0f;
+	// Thin, dusty CO2 atmosphere -> butterscotch/rose; ~0.43x Earth's solar flux.
+	mars.scaleFactor = 1.0210f; 	mars.E = 6.2f; 		mars.C_R.x = 1.0f; 	mars.C_R.y = 0.60f; 	mars.C_R.z = 0.45f;
+	// Dwarf planet, trace N2/CH4 ices -> faint pale ice-blue. True flux ~0.003
+	// (invisible); E = 1.5 keeps the thin shell (scaleFactor 1.001) faintly visible.
+	eris.scaleFactor = 1.001f; 	eris.E = 1.5f; 		eris.C_R.x = 0.80f; 	eris.C_R.y = 0.86f; 	eris.C_R.z = 0.95f;
+	// H2/He gas giant, ammonia-charged cloud haze -> soft warm cream; ~1/27x sun.
+	jupiter.scaleFactor = 1.1448f;jupiter.E = 0.53f; 	jupiter.C_R.x = 1.0f; 	jupiter.C_R.y = 0.93f; 	jupiter.C_R.z = 0.80f;
 	saturn.scaleFactor = 0.0f; 	saturn.E = 14.3f; 	saturn.C_R.x = 0.3f; 	saturn.C_R.y = 0.7f; 	saturn.C_R.z = 1.0f;
 	uranus.scaleFactor = 0.0f; 	uranus.E = 14.3f; 	uranus.C_R.x = 0.3f; 	uranus.C_R.y = 0.7f; 	uranus.C_R.z = 1.0f;
 	neptune.scaleFactor = 0.0f; 	neptune.E = 14.3f; 	neptune.C_R.x = 0.3f; 	neptune.C_R.y = 0.7f; 	neptune.C_R.z = 1.0f;
-	pluto.scaleFactor = 3.5000f; pluto.E = 14.3f; 	pluto.C_R.x = 0.3f; 	pluto.C_R.y = 0.7f; 	pluto.C_R.z = 1.0f;
-	ceres.scaleFactor = 0.0f; 	ceres.E = 14.3f;		ceres.C_R.x = 0.3f; 	ceres.C_R.y = 0.7f; 	ceres.C_R.z = 1.0f;
+	// Thin N2/CH4 haze -> pale ice-blue. True flux ~0.009 (invisible); E = 2.0
+	// keeps the (stylized) shell faintly visible.
+	pluto.scaleFactor = 3.5000f; pluto.E = 2.0f; 	pluto.C_R.x = 0.75f; 	pluto.C_R.y = 0.83f; 	pluto.C_R.z = 1.0f; // pale ice-blue (kept at 1.0, the blue of the N2 haze)
+	// Trace water-vapor haze (near-airless) -> faint blue-white; shell suppressed
+	// (scaleFactor 0), values kept for completeness.
+	ceres.scaleFactor = 0.0f; 	ceres.E = 1.9f;		ceres.C_R.x = 0.85f; 	ceres.C_R.y = 0.90f; 	ceres.C_R.z = 1.0f;
 
 	atmosphereArray[0] = mercury;
 	atmosphereArray[1] = venus;
@@ -1034,10 +1051,10 @@ void drawAtmosphere()
 
 			//mat4 m = multiplymat4(translatevec3(translation), scale());
 			mat4 m = multiplymat4(modelmat, scale(planetInstanceArray[i].size*scaleFactor));
-			// 1/lambda^4 for lambda = (0.3, 0.7, 1.0) um, normalized so blue = 1
-			// vec3 C_R = {1.0, 0.0337, 0.0081};
-			vec3 C_R = {0.3f, 0.7f, 1.0f};
-			float E = 14.3f;
+			// Per-body solar brightness + Rayleigh tint (set in atmosphereBuilder()).
+			// The white Mie term is summed on top, so C_R's RGB sets each limb's hue.
+			vec3 C_R = atmosphereArray[i].C_R;
+			float E = atmosphereArray[i].E;
 
 			glUniform1f(glGetUniformLocation(atmosphereShader, "fInnerRadius"), fInner);
 			glUniform1f(glGetUniformLocation(atmosphereShader, "fOuterRadius"), fOuter);

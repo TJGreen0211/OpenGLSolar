@@ -11,7 +11,7 @@ A 3D solar system rendered in C with OpenGL 4.1 (core profile). Originally devel
 
 - Sun + 11 bodies (Mercury, Venus, Earth, Mars, Ceres, Jupiter, Saturn, Uranus, Neptune, Pluto, Eris) with real relative orbital periods, rotation durations, and axial tilts (see `planetBuilder()` in `src/Main.c`).
 - Per-planet diffuse + normal map textures (all in `include/textures/Planets/`).
-- Atmospheric scattering shaders (Fresnel limb glow with per-body scale factor and color — see `atmosphereBuilder()`, enabled for Venus/Earth/Mars/Pluto/Ceres).
+- Atmospheric scattering shaders (Fresnel limb glow with per-body scale factor and color — see `atmosphereBuilder()`, enabled for Venus/Earth/Mars/Pluto/Ceres/Jupiter/Eris).
 - A moon-like body orbiting Earth — note: in this commit it is rendered with Earth's own texture (`drawMoon()` binds `planetInstanceArray[2]`, `src/Main.c:687`); the dedicated `moonTexture`/`moonBuilder()` code is present but never called. Real moon systems only exist on `master`.
 - 6-face skybox cubemap (`include/textures/skybox3/`).
 - Torus mesh (`include/obj/torus.obj`) rendered near the sun.
