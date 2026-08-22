@@ -1302,6 +1302,52 @@ void setupUIButtons()
 	}
 }
 
+/* Camera sliders (bottom-left, blue = movement speed on top, orange =
+   scroll speed below). Log-mapped so the low end stays usable:
+   t in [0,1] -> min*(max/min)^t. */
+#define UI_SLIDER_MOVEMENT 0
+#define UI_SLIDER_SCROLL   1
+#define UI_SLIDER_COUNT    2
+
+#define CAMERA_MOVEMENT_MIN 100.0f
+#define CAMERA_MOVEMENT_MAX 20000.0f
+#define CAMERA_SCROLL_MIN 50.0f
+#define CAMERA_SCROLL_MAX 6000.0f
+
+static float cameraSliderValue(float minV, float maxV, float t)
+{
+	return minV * powf(maxV / minV, t);
+}
+
+static float cameraSliderInitT(float minV, float maxV, float value)
+{
+	return logf(value / minV) / logf(maxV / minV);
+}
+
+void onCameraSliderChanged(int id, float t)
+{
+	if (id == UI_SLIDER_MOVEMENT)
+		MovementSpeed = cameraSliderValue(CAMERA_MOVEMENT_MIN, CAMERA_MOVEMENT_MAX, t);
+	else if (id == UI_SLIDER_SCROLL)
+		CameraScrollSpeed = cameraSliderValue(CAMERA_SCROLL_MIN, CAMERA_SCROLL_MAX, t);
+}
+
+/* Accent colours double as labels: blue = movement, orange = scroll. */
+static const float sliderAccentMovement[3] = { 0.45f, 0.65f, 1.0f };
+static const float sliderAccentScroll[3] = { 1.0f, 0.55f, 0.30f };
+
+void uiSetupCameraSliders()
+{
+	uiSliderSetChangedFn(onCameraSliderChanged);
+	/* t0 puts each handle at the current camera default. */
+	uiAddSlider(UI_SLIDER_MOVEMENT,
+		cameraSliderInitT(CAMERA_MOVEMENT_MIN, CAMERA_MOVEMENT_MAX, MovementSpeed),
+		sliderAccentMovement);
+	uiAddSlider(UI_SLIDER_SCROLL,
+		cameraSliderInitT(CAMERA_SCROLL_MIN, CAMERA_SCROLL_MAX, CameraScrollSpeed),
+		sliderAccentScroll);
+}
+
 /* Same position formula drawPlanet uses each frame. */
 vec3 getPlanetWorldPosition(int i)
 {
@@ -1439,10 +1485,12 @@ int main(int argc, char *argv[])
 	finishLoadingStep();
 	uiInit();
 	setupUIButtons();
+	uiSetupCameraSliders();
 	{
 		int ww, wh;
 		glfwGetWindowSize(window, &ww, &wh);
 		uiLayoutColumn(ww, wh, UI_TARGET_COUNT);
+		uiLayoutSliders(ww, wh, UI_SLIDER_COUNT);
 	}
 	// Some moons may be missing on disk, so the count above can land below
 	// 100%; force one final full-bar frame before handing over to the scene.
@@ -1608,11 +1656,20 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 			followTarget = id;
 			focusDolly = 1;
 		}
+		else if (uiSliderPress((float)mx, (float)my) >= 0)
+		{
+			/* grabbed a camera slider; do not start an arcball drag */
+		}
 		else
 			processMousePress(window);
 	}
 	else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
 	{
+		int slid = uiSliderRelease();
+		if (slid == UI_SLIDER_MOVEMENT)
+			fprintf(stderr, "[trace] ui: movement speed = %g\n", (double)MovementSpeed);
+		else if (slid == UI_SLIDER_SCROLL)
+			fprintf(stderr, "[trace] ui: scroll speed = %g\n", (double)CameraScrollSpeed);
 		processMouseRelease();
 	}
 }
@@ -1620,6 +1677,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 void window_size_callback(GLFWwindow* window, int width, int height)
 {
 	uiLayoutColumn(width, height, UI_TARGET_COUNT);
+	uiLayoutSliders(width, height, UI_SLIDER_COUNT);
 }
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)

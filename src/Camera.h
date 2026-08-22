@@ -26,6 +26,7 @@ enum Camera_Movement {
 extern float CameraDistance;
 extern const float CameraDistanceMax;
 extern GLfloat MovementSpeed;
+extern GLfloat CameraScrollSpeed;
 
 mat4 getViewMatrix();
 mat4 getViewPosition();

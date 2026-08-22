@@ -12,6 +12,9 @@ const float toRadians = (float)(M_PI / 180.0f);
 extern float CameraDistance = 5000.0f;
 extern const float CameraDistanceMax = 25000.0f;
 extern GLfloat MovementSpeed = 5000.0f;
+/* Orbit dolly per scroll notch, in world units (the old hardcoded
+   CameraDistanceMax * 0.06f). The UI slider adjusts this live. */
+extern GLfloat CameraScrollSpeed = 1500.0f;
 
 /* Quaternion per the arcball article: cosine is the cosine of half the
    rotation angle, axis is the unit rotation axis scaled by the sine of
@@ -249,7 +252,7 @@ void processMouseMovement(GLFWwindow *window, GLfloat xpos, GLfloat ypos)
    (yoffset > 0) grows it to the fixed maximum. */
 void processMouseScroll(GLfloat yoffset)
 {
-	CameraDistance += yoffset * (CameraDistanceMax * 0.06f);
+	CameraDistance += yoffset * CameraScrollSpeed;
 	if (CameraDistance < 0.0f)
 		CameraDistance = 0.0f;
 	if (CameraDistance > CameraDistanceMax)

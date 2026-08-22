@@ -5,6 +5,10 @@ static GLuint UIShader;
 static GLuint UIvao, UIvbo;
 static uiButton buttons[UI_MAX_BUTTONS];
 static int uiCount = 0;
+static uiSlider sliders[UI_MAX_SLIDERS];
+static int sliderCount = 0;
+static int activeSlider = -1;
+static uiSliderChangedFn sliderChanged = NULL;
 static int uiReady = 0;
 
 void attachGUIShaders()
@@ -123,12 +127,131 @@ static int pointInRect(float x, float y, const float rect[4])
 	       y >= rect[1] && y < rect[1] + rect[3];
 }
 
+int uiAddSlider(int id, float t0, const float accent[3])
+{
+	if (!uiReady || sliderCount >= UI_MAX_SLIDERS)
+		return -1;
+
+	uiSlider *s = &sliders[sliderCount];
+	s->id = id;
+	if (accent)
+	{
+		s->accent[0] = accent[0];
+		s->accent[1] = accent[1];
+		s->accent[2] = accent[2];
+	}
+	else
+	{
+		s->accent[0] = 0.45f;
+		s->accent[1] = 0.65f;
+		s->accent[2] = 1.0f;
+	}
+	s->t = t0 < 0.0f ? 0.0f : (t0 > 1.0f ? 1.0f : t0);
+	s->rect[0] = s->rect[1] = s->rect[2] = s->rect[3] = 0.0f;
+	s->hovered = 0;
+	s->active = 0;
+	sliderCount++;
+	/* Sync the consumer with the starting position. */
+	if (sliderChanged)
+		sliderChanged(id, s->t);
+	return sliderCount - 1;
+}
+
+int uiSliderCount(void)
+{
+	return sliderCount;
+}
+
+/* Stacked horizontal sliders anchored at the bottom-left corner. */
+void uiLayoutSliders(int winW, int winH, int count)
+{
+	if (!uiReady || count <= 0)
+		return;
+	if (count > sliderCount)
+		count = sliderCount;
+
+	float w = (float)winW * 0.18f;
+	if (w > 240.0f)
+		w = 240.0f;
+	if (w < 120.0f)
+		w = 120.0f;
+	float h = 36.0f;
+	float gap = 12.0f;
+	float margin = 24.0f;
+
+	float x = margin;
+	float totalH = (float)count * h + (float)(count - 1) * gap;
+	float y = (float)winH - margin - totalH;
+	if (y < 0.0f)
+		y = 0.0f;
+
+	for (int i = 0; i < count; i++)
+	{
+		sliders[i].rect[0] = x;
+		sliders[i].rect[1] = y;
+		sliders[i].rect[2] = w;
+		sliders[i].rect[3] = h;
+		y += h + gap;
+	}
+}
+
+void uiSliderSetChangedFn(uiSliderChangedFn fn)
+{
+	sliderChanged = fn;
+}
+
+static void sliderSetT(uiSlider *s, float x)
+{
+	float t = (x - s->rect[0]) / s->rect[2];
+	if (t < 0.0f)
+		t = 0.0f;
+	if (t > 1.0f)
+		t = 1.0f;
+	if (t != s->t)
+	{
+		s->t = t;
+		if (sliderChanged)
+			sliderChanged(s->id, t);
+	}
+}
+
+int uiSliderPress(float x, float y)
+{
+	if (!uiReady)
+		return -1;
+	for (int i = 0; i < sliderCount; i++)
+		if (pointInRect(x, y, sliders[i].rect))
+		{
+			activeSlider = i;
+			sliders[i].active = 1;
+			sliderSetT(&sliders[i], x);
+			return sliders[i].id;
+		}
+	return -1;
+}
+
+int uiSliderRelease(void)
+{
+	if (activeSlider < 0)
+		return -1;
+	int id = sliders[activeSlider].id;
+	sliders[activeSlider].active = 0;
+	activeSlider = -1;
+	return id;
+}
+
 void uiSetMouse(float x, float y)
 {
 	if (!uiReady)
 		return;
 	for (int i = 0; i < uiCount; i++)
 		buttons[i].hovered = pointInRect(x, y, buttons[i].rect);
+	for (int i = 0; i < sliderCount; i++)
+	{
+		sliders[i].hovered = pointInRect(x, y, sliders[i].rect);
+		if (activeSlider == i)
+			sliderSetT(&sliders[i], x);
+	}
 }
 
 int uiHitTest(float x, float y)
@@ -141,11 +264,23 @@ int uiHitTest(float x, float y)
 	return UI_ACT_NONE;
 }
 
-/* Slot + icon per button, drawn last in the frame with standard alpha
-   blending and no depth test. */
+/* Flat (untextured) UI quad. */
+static void uiDrawFlat(float x, float y, float w, float h,
+	float r, float g, float b, float a, float tint)
+{
+	glUniform4f(glGetUniformLocation(UIShader, "uRect"), x, y, w, h);
+	glUniform4f(glGetUniformLocation(UIShader, "uColor"), r, g, b, a);
+	glUniform1f(glGetUniformLocation(UIShader, "uHasTex"), 0.0f);
+	glUniform1f(glGetUniformLocation(UIShader, "uTint"), tint);
+	glUniform1f(glGetUniformLocation(UIShader, "uAlpha"), 1.0f);
+	glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
+/* Slot + icon per button and track + handle per slider, drawn last in the
+   frame with standard alpha blending and no depth test. */
 void uiDrawAll(int followedId, int pauseActive)
 {
-	if (!uiReady || uiCount == 0)
+	if (!uiReady || (uiCount == 0 && sliderCount == 0))
 		return;
 
 	int viewport[4];
@@ -174,14 +309,9 @@ void uiDrawAll(int followedId, int pauseActive)
 
 		/* Dark slot, slightly inset, behind the icon. */
 		float inset = b->rect[2] * 0.04f;
-		glUniform4f(glGetUniformLocation(UIShader, "uRect"),
-			b->rect[0] + inset, b->rect[1] + inset,
-			b->rect[2] - 2.0f * inset, b->rect[3] - 2.0f * inset);
-		glUniform4f(glGetUniformLocation(UIShader, "uColor"), 0.04f, 0.05f, 0.09f, 0.6f);
-		glUniform1f(glGetUniformLocation(UIShader, "uHasTex"), 0.0f);
-		glUniform1f(glGetUniformLocation(UIShader, "uTint"), tint);
-		glUniform1f(glGetUniformLocation(UIShader, "uAlpha"), 1.0f);
-		glDrawArrays(GL_TRIANGLES, 0, 6);
+		uiDrawFlat(b->rect[0] + inset, b->rect[1] + inset,
+			b->rect[2] - 2.0f * inset, b->rect[3] - 2.0f * inset,
+			0.04f, 0.05f, 0.09f, 0.6f, tint);
 
 		/* Icon on top; the active pause state swaps in its pressed texture. */
 		GLuint tex = (active && b->textureActive) ? b->textureActive : b->texture;
@@ -190,6 +320,28 @@ void uiDrawAll(int followedId, int pauseActive)
 			b->rect[0], b->rect[1], b->rect[2], b->rect[3]);
 		glUniform1f(glGetUniformLocation(UIShader, "uHasTex"), 1.0f);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
+	}
+
+	for (int i = 0; i < sliderCount; i++)
+	{
+		uiSlider *s = &sliders[i];
+		float x = s->rect[0], y = s->rect[1], w = s->rect[2], h = s->rect[3];
+		float tint = s->active ? 0.5f : (s->hovered ? 0.25f : 0.0f);
+
+		uiDrawFlat(x, y, w, h, 0.04f, 0.05f, 0.09f, 0.6f, 0.0f);
+
+		/* Track, filled portion left of the handle, then the handle — fill
+		   and handle in the slider's accent colour so each slider reads as
+		   its own thing. */
+		float trackX = x + 8.0f;
+		float trackW = w - 16.0f;
+		float trackY = y + h * 0.5f - 2.0f;
+		uiDrawFlat(trackX, trackY, trackW, 4.0f, 0.22f, 0.25f, 0.32f, 0.9f, 0.0f);
+		if (s->t > 0.0f)
+			uiDrawFlat(trackX, trackY, trackW * s->t, 4.0f,
+				s->accent[0], s->accent[1], s->accent[2], 0.9f, 0.0f);
+		uiDrawFlat(trackX + trackW * s->t - 7.0f, y + h * 0.5f - 7.0f,
+			14.0f, 14.0f, s->accent[0], s->accent[1], s->accent[2], 1.0f, tint);
 	}
 
 	glBindVertexArray(0);
@@ -212,6 +364,8 @@ void uiShutdown(void)
 			glDeleteTextures(1, &buttons[i].textureActive);
 	}
 	uiCount = 0;
+	sliderCount = 0;
+	activeSlider = -1;
 	glDeleteVertexArrays(1, &UIvao);
 	glDeleteBuffers(1, &UIvbo);
 	glDeleteProgram(UIShader);
