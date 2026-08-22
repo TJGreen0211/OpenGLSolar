@@ -32,6 +32,8 @@ mat4 getViewPosition();
 mat4 getViewRotation();
 
 vec3 getCameraPosition();
+vec3 getCameraPivot();
+void setCameraPivot(vec3 pivot);
 
 void updateCameraVectors();
 void processKeyboard(enum Camera_Movement direction, GLfloat deltaTime);

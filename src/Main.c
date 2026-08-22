@@ -47,6 +47,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
+void window_size_callback(GLFWwindow* window, int width, int height);
 GLuint loadShader(char *vertex_path, char *fragement_path);
 void initLoadingScreen();
 void renderLoadingScreen(float progress);
@@ -54,10 +55,6 @@ void finishLoadingStep();
 #ifdef _WIN32
 static GLADapiproc gladGetProcAddress(const char *name);
 #endif
-
-int mousePosX, mousePosY;
-imgButton button1, mercuryButton, venusButton, earthButton, marsButton,
-	jupiterButton, saturnButton, uranusButton, neptuneButton;
 
 const float WIDTH = 1400, HEIGHT = 800;
 float ASPECT = 1400.0f/800.0f;
@@ -76,7 +73,7 @@ GLuint sunNormal;
 GLuint moonNormalTexture;
 GLuint moonDisplacementTexture;
 GLuint skyboxShader, sunShader, planetShader, atmosphereShader, ringShader;
-GLuint vertUIShader, fragUIShader, UIShader;
+GLuint vertUIShader, fragUIShader;
 GLuint vPosition, vNormal, vTangent, vBitangent;
 GLuint planetVAO, planetVBO, skyboxVAO, skyboxVBO, objectVAO, objectVBO, atmosphereVAO, atmosphereVBO;
 GLuint sunQuadVAO, sunQuadVBO;
@@ -90,6 +87,13 @@ GLfloat deltaTime = 0.0f;
 GLfloat lastFrame = 0.0f;
 int stopRotation = 0;
 
+/* Camera follow state, set by the right-edge button column:
+   -1 = free camera (WASD moves it), -2 = sun/overview pinned at the origin,
+   0..10 = following planetInstanceArray[i]. focusDolly runs the one-shot
+   distance glide right after a target button is clicked. */
+int followTarget = -1;
+int focusDolly = 0;
+
 // Loading screen state. loadWindow is the GL context the loading frames are
 // drawn on; it is set in main() right after setupGLFW() and read by the
 // loader functions (planet/moon texture loops) so they can redraw the bar.
@@ -100,10 +104,37 @@ int loadStepDone = 0;
 
 // Worst-case number of discrete load steps: skybox (1) + sun (2) +
 // planet textures (11x3) + moons (neutral normal 1 + displacement 1 + up to
-// MAX_MOONS textures) + atmosphere (1) + init (1) + buttons (1) + UI shader (1).
-// If some moon textures are missing the bar tops out below 100% and the final
-// frame forces it to 1.0, which is fine.
-#define LOAD_TOTAL_STEPS (1 + 2 + 33 + 2 + MAX_MOONS + 4)
+// MAX_MOONS textures) + atmosphere (1) + init (1) + UI buttons (13) +
+// UI shader (1). If some moon textures are missing the bar tops out below
+// 100% and the final frame forces it to 1.0, which is fine.
+#define LOAD_TOTAL_STEPS (1 + 2 + 33 + 2 + MAX_MOONS + 16)
+
+/* One entry per button in the right-edge column, top to bottom: sun/
+   overview, planets in planetInstanceArray order (0..10), pause last.
+   actId is the uiHitTest value (-2 pause, -1 sun, 0..10 planet). Adding a
+   moon later is one row here plus one button slot. */
+struct uiTargetDef {
+	const char *icon;
+	const char *activeIcon; // alternate art for the active/pressed state
+	int actId;
+};
+
+#define UI_TARGET_COUNT 13
+static const struct uiTargetDef uiTargets[UI_TARGET_COUNT] = {
+	{ "include/textures/buttons/sun.png",     NULL, UI_ACT_SUN },
+	{ "include/textures/buttons/mercury.png", NULL, 0 },
+	{ "include/textures/buttons/venus.png",   NULL, 1 },
+	{ "include/textures/buttons/earth.png",   NULL, 2 },
+	{ "include/textures/buttons/mars.png",    NULL, 3 },
+	{ "include/textures/buttons/ceres.png",   NULL, 4 },
+	{ "include/textures/buttons/jupiter.png", NULL, 5 },
+	{ "include/textures/buttons/saturn.png",  NULL, 6 },
+	{ "include/textures/buttons/uranus.png",  NULL, 7 },
+	{ "include/textures/buttons/neptune.png", NULL, 8 },
+	{ "include/textures/buttons/pluto.png",   NULL, 9 },
+	{ "include/textures/buttons/eris.png",    NULL, 10 },
+	{ "include/textures/buttonUp.png",        "include/textures/buttonDown.png", UI_ACT_PAUSE },
+};
 
 #define MAX_MOONS 21
 int numPlanets = 11;
@@ -1150,6 +1181,17 @@ static GLADapiproc gladGetProcAddress(const char *name)
 
 void doMovement()
 {
+	/* Any WASD press releases follow: the camera moves freely from wherever
+	   it currently is. Dragging never releases follow. */
+	if (actionPress == GLFW_PRESS
+		&& (keys == GLFW_KEY_W || keys == GLFW_KEY_S
+			|| keys == GLFW_KEY_A || keys == GLFW_KEY_D)
+		&& followTarget != -1)
+	{
+		followTarget = -1;
+		focusDolly = 0;
+	}
+
 	if(keys == GLFW_KEY_W && actionPress == GLFW_PRESS)
         processKeyboard(FORWARD, deltaTime);
     if(keys == GLFW_KEY_S && actionPress == GLFW_PRESS)
@@ -1217,6 +1259,7 @@ GLFWwindow *setupGLFW() {
 	glfwSetCursorPosCallback(window, mouse_callback);
 	glfwSetScrollCallback(window, scroll_callback);
 	glfwSetMouseButtonCallback(window, mouse_button_callback);
+	glfwSetWindowSizeCallback(window, window_size_callback);
 	return window;
 }
 
@@ -1233,30 +1276,67 @@ int initCubemap()
 	return loadCubemap(cubemapArray);
 }
 
-void initializePlanetButtons()
+void setupUIButtons()
 {
-	button1 = initButton(1300.0, 700.0, 100.0, &button1, "include/textures/buttonUp.png");
-	mercuryButton = initButton(100.0, 100.0, 50.0, &mercuryButton, "include/textures/buttons/mercury.png");
-	venusButton = initButton(200.0, 100.0, 50.0, &venusButton, "include/textures/buttons/venus.png");
-	earthButton = initButton(300.0, 100.0, 50.0, &earthButton, "include/textures/buttons/earth.png");
-	marsButton = initButton(400.0, 100.0, 50.0, &marsButton, "include/textures/buttons/mars.png");
-
-	jupiterButton = initButton(500.0, 100.0, 50.0, &jupiterButton, "include/textures/buttons/jupiter.png");
-	saturnButton = initButton(600.0, 100.0, 50.0, &saturnButton, "include/textures/buttons/saturn.png");
-	uranusButton = initButton(700.0, 100.0, 50.0, &uranusButton, "include/textures/buttons/uranus.png");
-	neptuneButton = initButton(800.0, 100.0, 50.0, &neptuneButton, "include/textures/buttons/neptune.png");
+	for (int i = 0; i < UI_TARGET_COUNT; i++)
+	{
+		uiAddButton(uiTargets[i].actId, uiTargets[i].icon, uiTargets[i].activeIcon);
+		finishLoadingStep();
+	}
 }
 
-void drawPlanetButtons()
+/* Same position formula drawPlanet uses each frame. */
+vec3 getPlanetWorldPosition(int i)
 {
-	drawButton(mercuryButton);
-	drawButton(venusButton);
-	drawButton(earthButton);
-	drawButton(marsButton);
-	drawButton(jupiterButton);
-	drawButton(saturnButton);
-	drawButton(uranusButton);
-	drawButton(neptuneButton);
+	vec3 p;
+	p.x = planetInstanceArray[i].radius * (float)cos(orbitSpeedArray[i]);
+	p.y = 0.0f;
+	p.z = planetInstanceArray[i].radius * (float)sin(orbitSpeedArray[i]);
+	return p;
+}
+
+/* Eases the arcball pivot to the followed body, and (while focusDolly is
+   set, right after a button click) dollies CameraDistance to a comfortable
+   frame for that body. Exponential smoothing, so it is frame-rate
+   independent. A paused followed planet is stationary — the pivot still
+   converges to it, which is fine. */
+void updateCameraFollow()
+{
+	if (followTarget == -1)
+		return;
+
+	vec3 goal;
+	if (followTarget == -2)
+	{
+		goal.x = 0.0f;
+		goal.y = 0.0f;
+		goal.z = 0.0f;
+	}
+	else
+		goal = getPlanetWorldPosition(followTarget);
+
+	float k = 1.0f - expf(-6.0f * deltaTime);
+	vec3 curPivot = getCameraPivot();
+	vec3 next;
+	next.x = curPivot.x + (goal.x - curPivot.x) * k;
+	next.y = curPivot.y + (goal.y - curPivot.y) * k;
+	next.z = curPivot.z + (goal.z - curPivot.z) * k;
+	setCameraPivot(next);
+
+	if (focusDolly)
+	{
+		float goalDist = (followTarget == -2)
+			? 5000.0f
+			: planetInstanceArray[followTarget].size * 3.0f;
+		if (goalDist < 10.0f)
+			goalDist = 10.0f;
+		if (goalDist > CameraDistanceMax)
+			goalDist = CameraDistanceMax;
+
+		CameraDistance += (goalDist - CameraDistance) * k;
+		if (fabsf(CameraDistance - goalDist) < 0.02f * goalDist)
+			focusDolly = 0;
+	}
 }
 
 int main(int argc, char *argv[])
@@ -1334,14 +1414,19 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "[trace] main: perspective\n");
 	createPerspectiveMatrix();
 
-	initializePlanetButtons();
-	finishLoadingStep();
-
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_MULTISAMPLE);
 	glCullFace(GL_BACK);
+
 	attachGUIShaders();
 	finishLoadingStep();
+	uiInit();
+	setupUIButtons();
+	{
+		int ww, wh;
+		glfwGetWindowSize(window, &ww, &wh);
+		uiLayoutColumn(ww, wh, UI_TARGET_COUNT);
+	}
 	// Some moons may be missing on disk, so the count above can land below
 	// 100%; force one final full-bar frame before handing over to the scene.
 	renderLoadingScreen(1.0f);
@@ -1355,6 +1440,7 @@ int main(int argc, char *argv[])
 		GLfloat currentFrame = (float)glfwGetTime();
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
+        updateCameraFollow();
         v = getViewMatrix();
 
         fpsFrames++;
@@ -1393,8 +1479,8 @@ int main(int argc, char *argv[])
 		// anything behind it while still being occluded by anything in front.
 		drawSun();
 
-		//drawButton(button1);
-		//drawPlanetButtons();
+		/* UI last: no depth test, standard alpha blend, its own state. */
+		uiDrawAll(followTarget, stopRotation);
 
 		if(stopRotation == 0){
 			for(int i = 0; i < 11; i++)
@@ -1430,6 +1516,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	uiShutdown();
 	glfwTerminate();
 	return 0;
 }
@@ -1473,40 +1560,49 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
 void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 {
+	uiSetMouse((float)xpos, (float)ypos);
 	int state = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT);
 	if (state == GLFW_PRESS)
 	{
 		processMouseMovement(window, (float)xpos, (float)ypos);
 	}
-	mousePosX = (int)xpos;
-	mousePosY = (int)ypos;
 }
 
-void checkButtonPress(imgButton b)
-{
-	if(mousePosX <= b.xTopRight && mousePosX >= b.xTopLeft && mousePosY >= b.yTopRight && mousePosY <= b.yBottomRight)
-	{
-		if(stopRotation == 0) {
-			stopRotation = 1;
-			buttonState(0);
-		}
-		else {
-			stopRotation = 0;
-			buttonState(1);
-		}
-	}
-}
-
+/* A press on a button acts on the button and must NOT also start an arcball
+   drag; only empty-space presses start rotation. A drag that releases over a
+   button does nothing, because only the press is tested. */
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
 	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
 	{
-		checkButtonPress(button1);
-		processMousePress(window);
+		double mx, my;
+		glfwGetCursorPos(window, &mx, &my);
+		int id = uiHitTest((float)mx, (float)my);
+		if (id == UI_ACT_PAUSE)
+		{
+			stopRotation = stopRotation ? 0 : 1;
+		}
+		else if (id == UI_ACT_SUN)
+		{
+			followTarget = UI_ACT_SUN;
+			focusDolly = 1;
+		}
+		else if (id >= UI_ACT_PLANET_BASE)
+		{
+			followTarget = id;
+			focusDolly = 1;
+		}
+		else
+			processMousePress(window);
 	}
 	else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
 	{
 		processMouseRelease();
 	}
+}
+
+void window_size_callback(GLFWwindow* window, int width, int height)
+{
+	uiLayoutColumn(width, height, UI_TARGET_COUNT);
 }
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)

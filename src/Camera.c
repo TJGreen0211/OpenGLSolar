@@ -59,6 +59,18 @@ static Arcball arcball = {
 static vec3 Pivot = {0.0f, 0.0f, 0.0f};
 static int dragging = 0;
 
+/* Pivot accessors: the planet-follow feature in Main.c eases Pivot toward
+   the followed body each frame without reaching into this file. */
+vec3 getCameraPivot()
+{
+    return Pivot;
+}
+
+void setCameraPivot(vec3 pivot)
+{
+    Pivot = pivot;
+}
+
 vec3 Front = {0.0f, 0.0f, -1.0f};
 vec3 Up = {0.0f, 1.0f, 0.0f};
 vec3 Right = {1.0f, 0.0f, 0.0f};
