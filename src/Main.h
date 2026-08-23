@@ -20,7 +20,6 @@
 #include "Geometry.h"
 #include "Obj.h"
 #include "GUI.h"
-#include "SOIL/SOIL.h"
 
 
 
