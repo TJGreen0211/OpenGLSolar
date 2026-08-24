@@ -77,6 +77,7 @@ GLuint vertUIShader, fragUIShader;
 GLuint vPosition, vNormal, vTangent, vBitangent;
 GLuint planetVAO, planetVBO, skyboxVAO, skyboxVBO, objectVAO, objectVBO, atmosphereVAO, atmosphereVBO;
 GLuint sunQuadVAO, sunQuadVBO;
+GLuint orbitShader, orbitVAO, orbitVBO;
 GLuint ringVAO[11], ringVBO[11];
 ring ringArray[11];
 GLuint shadowFBO, depthMap, rboDepth;
@@ -137,6 +138,8 @@ static const struct uiTargetDef uiTargets[UI_TARGET_COUNT] = {
 };
 
 #define MAX_MOONS 21
+// Vertices per orbit circle (drawOrbits draws a GL_LINE_LOOP of this size).
+#define ORBIT_SEGMENTS 256
 int numPlanets = 11;
 planetParameters planetInstanceArray[11];
 atmosphereParameters atmosphereArray[11];
@@ -679,6 +682,34 @@ void initAtmosphere() {
 	glBindVertexArray(0);
 }
 
+void initOrbits()
+{
+	createShader(&orbitShader, "src/shaders/orbit.vert",
+		"src/shaders/orbit.frag");
+
+	// Unit circle in the XZ plane (the plane every planet orbits in). All
+	// planets share it; drawOrbits scales it to each planet's orbit radius.
+	GLfloat verts[ORBIT_SEGMENTS*3];
+	for(int i = 0; i < ORBIT_SEGMENTS; i++)
+	{
+		float a = 2.0f*3.14159265358979f*(float)i/(float)ORBIT_SEGMENTS;
+		verts[i*3+0] = cosf(a);
+		verts[i*3+1] = 0.0f;
+		verts[i*3+2] = sinf(a);
+	}
+
+	glGenVertexArrays(1, &orbitVAO);
+	glBindVertexArray(orbitVAO);
+	glGenBuffers(1, &orbitVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, orbitVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
+
+	GLint aPosition = glGetAttribLocation(orbitShader, "vPosition");
+	glEnableVertexAttribArray(aPosition);
+	glVertexAttribPointer(aPosition, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), (GLvoid*)0);
+	glBindVertexArray(0);
+}
+
 void initSkybox() {
 	GLfloat skyboxVertices[] = {
         // Positions
@@ -874,6 +905,7 @@ void init()
 	initObject();
 	fprintf(stderr, "[trace] init: atmosphere\n");
 	initAtmosphere();
+	initOrbits();
 	fprintf(stderr, "[trace] init: done\n");
 
     glEnable(GL_DEPTH_TEST);
@@ -1115,6 +1147,34 @@ void drawPlanet()
     	glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber);
     	glBindVertexArray(0);
     }
+}
+
+void drawOrbits()
+{
+	glUseProgram(orbitShader);
+
+	// Faint white lines, the standard astronomy-app look. Depth is tested so
+	// planet bodies hide the far side of an orbit, but the lines never write
+	// depth, so they don't occlude anything themselves.
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glDepthMask(GL_FALSE);
+
+	glUniform1f(glGetUniformLocation(orbitShader, "uAlpha"), 0.4f);
+
+	for(int i = 0; i < 11; i++)
+	{
+		// Same circle drawPlanet() orbits on: XZ plane, planet's radius as scale.
+		mat4 m = scale(planetInstanceArray[i].radius);
+		initMVP(orbitShader, m, v);
+
+		glBindVertexArray(orbitVAO);
+		glDrawArrays(GL_LINE_LOOP, 0, ORBIT_SEGMENTS);
+		glBindVertexArray(0);
+	}
+
+	glDepthMask(GL_TRUE);
+	glDisable(GL_BLEND);
 }
 
 void drawPlanetRing()
@@ -1534,6 +1594,7 @@ int main(int argc, char *argv[])
 		// that orbits behind it (a closer planet still draws over the disc).
 		drawSunDisc();
 		drawPlanet();
+		drawOrbits();
 		drawPlanetRing();
 		//glFrontFace(GL_CW);
 		drawAtmosphere();
