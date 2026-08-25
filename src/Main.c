@@ -88,11 +88,14 @@ GLfloat deltaTime = 0.0f;
 GLfloat lastFrame = 0.0f;
 int stopRotation = 0;
 
-/* Camera follow state, set by the right-edge button column:
-   -1 = free camera (WASD moves it), -2 = sun/overview pinned at the origin,
-   0..10 = following planetInstanceArray[i]. focusDolly runs the one-shot
-   distance glide right after a target button is clicked. */
-int followTarget = -1;
+/* Camera follow state, set by the UI buttons. The value is the same space as
+   a uiHitTest result (and a uiButton id), so each trackable body has one:
+   UI_ACT_NONE (-3) = free camera (WASD moves it), UI_ACT_SUN (-1) = sun/
+   overview pinned at the origin, 0..10 = planetInstanceArray[i], 100+m =
+   moonInstanceArray[m]. Pause (-2) and toggles (200+) are controls, never
+   targets. focusDolly runs the one-shot distance glide right after a target
+   button is clicked. */
+int followTarget = UI_ACT_NONE;
 int focusDolly = 0;
 
 // Loading screen state. loadWindow is the GL context the loading frames are
@@ -106,14 +109,16 @@ int loadStepDone = 0;
 // Worst-case number of discrete load steps: skybox (1) + sun (2) +
 // planet textures (11x3) + moons (neutral normal 1 + displacement 1 + up to
 // MAX_MOONS textures) + atmosphere (1) + init (1) + UI buttons (13) +
-// UI shader (1). If some moon textures are missing the bar tops out below
-// 100% and the final frame forces it to 1.0, which is fine.
-#define LOAD_TOTAL_STEPS (1 + 2 + 33 + 2 + MAX_MOONS + 16)
+// moon panels (up to 11 toggles + MAX_MOONS moon buttons) + UI shader (1).
+// If some moon textures are missing the bar tops out below 100% and the
+// final frame forces it to 1.0, which is fine.
+#define LOAD_TOTAL_STEPS (1 + 2 + 33 + 2 + MAX_MOONS + 16 + 11 + MAX_MOONS)
 
 /* One entry per button in the right-edge column, top to bottom: sun/
    overview, planets in planetInstanceArray order (0..10), pause last.
-   actId is the uiHitTest value (-2 pause, -1 sun, 0..10 planet). Adding a
-   moon later is one row here plus one button slot. */
+   actId is the uiHitTest value (-2 pause, -1 sun, 0..10 planet). Moons are
+   NOT in this list — setupUIMoonButtons() adds each planet's chevron toggle
+   (200+planet) and moon buttons (100+moon) dynamically. */
 struct uiTargetDef {
 	const char *icon;
 	const char *activeIcon; // alternate art for the active/pressed state
@@ -1263,9 +1268,9 @@ void doMovement()
 	if (actionPress == GLFW_PRESS
 		&& (keys == GLFW_KEY_W || keys == GLFW_KEY_S
 			|| keys == GLFW_KEY_A || keys == GLFW_KEY_D)
-		&& followTarget != -1)
+		&& followTarget != UI_ACT_NONE)
 	{
-		followTarget = -1;
+		followTarget = UI_ACT_NONE;
 		focusDolly = 0;
 	}
 
@@ -1362,6 +1367,127 @@ void setupUIButtons()
 	}
 }
 
+/* ---------------------------------------------------------------------------
+ * Moon panels
+ *
+ * Every planet that owns at least one moon gets a collapsible panel hung off
+ * its right-edge button column: a small chevron toggle sits just to the
+ * planet's left, and (when the toggle is active) a row of moon buttons
+ * extends further left from it. Clicking a moon button makes the camera
+ * follow that moon, exactly like the planet buttons.
+ *
+ * The chevrons are generated procedurally (no texture asset), and each moon
+ * button reuses the moon's ALREADY-LOADED surface texture as its icon, so no
+ * extra SOIL decode is needed and the icon always matches the body.
+ * ------------------------------------------------------------------------- */
+
+static GLuint moonChevronLeft, moonChevronRight;
+
+/* Squared distance from point (px,py) to segment (ax,ay)-(bx,by). Used to
+   rasterise the chevron as two thick strokes. */
+static float uiSegDistSq(float px, float py,
+                         float ax, float ay, float bx, float by)
+{
+    float abx = bx - ax, aby = by - ay;
+    float len2 = abx * abx + aby * aby;
+    float t = len2 > 0.0f ? ((px - ax) * abx + (py - ay) * aby) / len2 : 0.0f;
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    float cx = ax + t * abx - px;
+    float cy = ay + t * aby - py;
+    return cx * cx + cy * cy;
+}
+
+/* dir < 0 -> chevron pointing left "<" (collapsed, content is to the left);
+   dir > 0 -> chevron pointing right ">" (expanded, click to collapse). */
+#define CHEVRON_SIZE 32
+static GLuint createChevronTexture(int dir)
+{
+    unsigned char px[CHEVRON_SIZE * CHEVRON_SIZE * 4];
+    for (int i = 0; i < CHEVRON_SIZE * CHEVRON_SIZE; i++)
+        px[i * 4 + 3] = 0;   // start fully transparent
+
+    /* Two strokes meeting at a tip. Default = left-pointing "<". */
+    float tipX = 9.0f, midY = 16.0f;
+    float wingX = 24.0f, topY = 8.0f, botY = 24.0f;
+    if (dir > 0)              // mirror to point right ">"
+    {
+        tipX = (float)CHEVRON_SIZE - 1.0f - tipX;
+        wingX = (float)CHEVRON_SIZE - 1.0f - wingX;
+    }
+    const float half = 3.0f, half2 = half * half;   // stroke half-thickness
+
+    for (int y = 0; y < CHEVRON_SIZE; y++)
+    {
+        for (int x = 0; x < CHEVRON_SIZE; x++)
+        {
+            float pxx = (float)x + 0.5f, pyy = (float)y + 0.5f;
+            float dTop  = uiSegDistSq(pxx, pyy, tipX, midY, wingX, topY);
+            float dBot  = uiSegDistSq(pxx, pyy, tipX, midY, wingX, botY);
+            float d = dTop < dBot ? dTop : dBot;
+            if (d <= half2)
+            {
+                int o = (y * CHEVRON_SIZE + x) * 4;
+                px[o + 0] = 120;   // pale blue-grey chevron
+                px[o + 1] = 150;
+                px[o + 2] = 200;
+                px[o + 3] = 255;
+            }
+        }
+    }
+
+    GLuint tex;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, CHEVRON_SIZE, CHEVRON_SIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, px);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return tex;
+}
+
+void setupUIMoonButtons()
+{
+    moonChevronLeft  = createChevronTexture(-1);
+    moonChevronRight = createChevronTexture(+1);
+
+    /* First global index of each planet's (contiguous) moon block inside
+       moonInstanceArray. Defs are added in planet order, so a planet's moons
+       are consecutive; moonStart[p] is the first one. */
+    int moonStart[11];
+    for (int p = 0; p < 11; p++)
+        moonStart[p] = -1;
+    for (int c = 0; c < loadedMoonCount; c++)
+    {
+        int p = moonInstanceArray[c].planet;
+        if (moonStart[p] < 0)
+            moonStart[p] = c;
+    }
+
+    for (int p = 0; p < 11; p++)
+    {
+        if (planetInstanceArray[p].numMoons <= 0)
+            continue;
+
+        /* Collapsible toggle, always visible. Collapsed icon = "<", expanded
+           (active) icon = ">" via the button's active-texture swap. */
+        uiAddButtonTex(UI_ACT_TOGGLE_BASE + p, p,
+                       moonChevronLeft, moonChevronRight, 1);
+        finishLoadingStep();
+
+        /* One moon button per moon, hidden until the panel is expanded. */
+        for (int j = 0; j < planetInstanceArray[p].numMoons; j++)
+        {
+            int m = moonStart[p] + j;
+            uiAddButtonTex(UI_ACT_MOON_BASE + m, p,
+                           moonInstanceArray[m].texture, 0, 0);
+            finishLoadingStep();
+        }
+    }
+}
+
 /* Camera sliders (bottom-left, blue = movement speed on top, orange =
    scroll speed below). Log-mapped so the low end stays usable:
    t in [0,1] -> min*(max/min)^t. */
@@ -1418,25 +1544,52 @@ vec3 getPlanetWorldPosition(int i)
 	return p;
 }
 
+/* Same position formula drawMoon uses each frame: the planet's centre plus
+   the moon's offset around it (orbit radius = moon.radius + planet.size,
+   angle = moonOrbitSpeedArray). Returns world space. */
+vec3 getMoonWorldPosition(int m)
+{
+	int p = moonInstanceArray[m].planet;
+	float r = moonInstanceArray[m].radius + planetInstanceArray[p].size;
+	vec3 off;
+	off.x = r * (float)cos(moonOrbitSpeedArray[m]);
+	off.y = 0.0f;
+	off.z = r * (float)sin(moonOrbitSpeedArray[m]);
+	return addvec3(getPlanetWorldPosition(p), off);
+}
+
 /* Eases the arcball pivot to the followed body, and (while focusDolly is
    set, right after a button click) dollies CameraDistance to a comfortable
    frame for that body. Exponential smoothing, so it is frame-rate
-   independent. A paused followed planet is stationary — the pivot still
+   independent. A followed body recomputes its goal from the current orbit
+   angles each frame, so tracking a moving moon works exactly like tracking
+   a planet. A paused followed body is stationary — the pivot still
    converges to it, which is fine. */
 void updateCameraFollow()
 {
-	if (followTarget == -1)
+	if (followTarget == UI_ACT_NONE)
 		return;
 
 	vec3 goal;
-	if (followTarget == -2)
+	float goalDist;
+	if (followTarget == UI_ACT_SUN)
 	{
 		goal.x = 0.0f;
 		goal.y = 0.0f;
 		goal.z = 0.0f;
+		goalDist = 5000.0f;
+	}
+	else if (followTarget >= UI_ACT_MOON_BASE)
+	{
+		int m = followTarget - UI_ACT_MOON_BASE;
+		goal = getMoonWorldPosition(m);
+		goalDist = moonInstanceArray[m].size * 3.0f;
 	}
 	else
+	{
 		goal = getPlanetWorldPosition(followTarget);
+		goalDist = planetInstanceArray[followTarget].size * 3.0f;
+	}
 
 	float k = 1.0f - expf(-6.0f * deltaTime);
 	vec3 curPivot = getCameraPivot();
@@ -1448,9 +1601,6 @@ void updateCameraFollow()
 
 	if (focusDolly)
 	{
-		float goalDist = (followTarget == -2)
-			? 5000.0f
-			: planetInstanceArray[followTarget].size * 3.0f;
 		if (goalDist < 10.0f)
 			goalDist = 10.0f;
 		if (goalDist > CameraDistanceMax)
@@ -1545,11 +1695,13 @@ int main(int argc, char *argv[])
 	finishLoadingStep();
 	uiInit();
 	setupUIButtons();
+	setupUIMoonButtons();
 	uiSetupCameraSliders();
 	{
 		int ww, wh;
 		glfwGetWindowSize(window, &ww, &wh);
 		uiLayoutColumn(ww, wh, UI_TARGET_COUNT);
+		uiLayoutPanels(ww, wh);
 		uiLayoutSliders(ww, wh, UI_SLIDER_COUNT);
 	}
 	// Some moons may be missing on disk, so the count above can land below
@@ -1643,6 +1795,14 @@ int main(int argc, char *argv[])
 	}
 
 	uiShutdown();
+	/* Chevron icons are shared, caller-owned textures (owned == 0 in the
+	   buttons), so uiShutdown doesn't free them — delete them here. The moon
+	   buttons reference moonInstanceArray textures, which (as before) are not
+	   freed at shutdown. */
+	if (moonChevronLeft)
+		glDeleteTextures(1, &moonChevronLeft);
+	if (moonChevronRight)
+		glDeleteTextures(1, &moonChevronRight);
 	glfwTerminate();
 	return 0;
 }
@@ -1707,6 +1867,18 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 		{
 			stopRotation = stopRotation ? 0 : 1;
 		}
+		else if (id >= UI_ACT_TOGGLE_BASE)
+		{
+			/* Collapse/expand this planet's moon row (toggles are 200+planet). */
+			int p = id - UI_ACT_TOGGLE_BASE;
+			uiSetPlanetExpanded(p, !uiPlanetExpanded(p));
+		}
+		else if (id >= UI_ACT_MOON_BASE)
+		{
+			/* Follow the clicked moon (moons are 100+index). */
+			followTarget = id;
+			focusDolly = 1;
+		}
 		else if (id == UI_ACT_SUN)
 		{
 			followTarget = UI_ACT_SUN;
@@ -1738,6 +1910,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 void window_size_callback(GLFWwindow* window, int width, int height)
 {
 	uiLayoutColumn(width, height, UI_TARGET_COUNT);
+	uiLayoutPanels(width, height);
 	uiLayoutSliders(width, height, UI_SLIDER_COUNT);
 }
 

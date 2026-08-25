@@ -79,6 +79,28 @@ int uiAddButton(int id, const char *icon, const char *activeIcon)
 	b->textureActive = (activeIcon && uiFileExists(activeIcon))
 		? loadTexture(activeIcon) : 0;
 	b->rect[0] = b->rect[1] = b->rect[2] = b->rect[3] = 0.0f;
+	b->planet = -1;
+	b->visible = 1;
+	b->expanded = 0;
+	b->owned = 1;   // loaded above; uiShutdown frees these
+	b->hovered = 0;
+	return uiCount++;
+}
+
+int uiAddButtonTex(int id, int planet, GLuint iconTex, GLuint texActive, int visible)
+{
+	if (!uiReady || uiCount >= UI_MAX_BUTTONS)
+		return -1;
+
+	uiButton *b = &buttons[uiCount];
+	b->id = id;
+	b->planet = planet;
+	b->texture = iconTex;
+	b->textureActive = texActive;   // 0 = no alternate (moon buttons)
+	b->rect[0] = b->rect[1] = b->rect[2] = b->rect[3] = 0.0f;
+	b->visible = visible ? 1 : 0;
+	b->expanded = 0;
+	b->owned = 0;   // caller owns iconTex; uiShutdown must not delete it
 	b->hovered = 0;
 	return uiCount++;
 }
@@ -119,6 +141,92 @@ void uiLayoutColumn(int winW, int winH, int count)
 		buttons[i].rect[3] = size;
 		y += size + gap;
 	}
+}
+
+/* Moon panels hang off the right-edge column: a small chevron toggle sits
+   directly to the left of a planet button, and (when that planet is expanded)
+   a row of moon buttons extends further left from the toggle. Positions are
+   derived from each planet's column-button rect, so this must run AFTER
+   uiLayoutColumn. Sizes shrink proportionally with the column buttons. */
+void uiLayoutPanels(int winW, int winH)
+{
+	(void)winW; (void)winH;
+	if (!uiReady)
+		return;
+
+	for (int i = 0; i < uiCount; i++)
+	{
+		uiButton *t = &buttons[i];
+		if (t->id < UI_ACT_TOGGLE_BASE)
+			continue;
+		int p = t->id - UI_ACT_TOGGLE_BASE;
+
+		/* This planet's column button is the one whose action id == p
+		   (0..10), unique among buttons. */
+		const uiButton *col = NULL;
+		for (int j = 0; j < uiCount; j++)
+			if (buttons[j].id == p) { col = &buttons[j]; break; }
+		if (!col)
+			continue;
+
+		float colX = col->rect[0], colY = col->rect[1], size = col->rect[2];
+		float gap = size * 0.18f;
+		float toggleSize = size * 0.70f;
+		float moonSize = size * 0.60f;
+
+		/* Toggle: directly left of the planet button, vertically centred. */
+		float tx = colX - gap - toggleSize;
+		float ty = colY + (size - toggleSize) * 0.5f;
+		t->rect[0] = tx; t->rect[1] = ty;
+		t->rect[2] = toggleSize; t->rect[3] = toggleSize;
+
+		/* Moons: a row starting just left of the toggle, moon 0 closest.
+		   Hidden (collapsed) buttons are still positioned so they land in the
+		   right place the moment the panel re-expands. */
+		float x = tx - gap - moonSize;
+		float my = colY + (size - moonSize) * 0.5f;
+		for (int j = 0; j < uiCount; j++)
+		{
+			uiButton *m = &buttons[j];
+			if (m->planet != p)
+				continue;
+			if (m->id < UI_ACT_MOON_BASE || m->id >= UI_ACT_TOGGLE_BASE)
+				continue;
+			m->rect[0] = x; m->rect[1] = my;
+			m->rect[2] = moonSize; m->rect[3] = moonSize;
+			x -= (moonSize + gap);
+		}
+	}
+}
+
+/* Toggling a planet's panel shows/hides every one of its moon buttons and
+   flips the toggle's expanded flag (which also swaps its chevron icon). The
+   camera is left undisturbed: a followed moon keeps being followed even if
+   its button hides. */
+void uiSetPlanetExpanded(int planet, int expanded)
+{
+	if (!uiReady)
+		return;
+	for (int i = 0; i < uiCount; i++)
+	{
+		uiButton *b = &buttons[i];
+		if (b->planet != planet)
+			continue;
+		if (b->id >= UI_ACT_TOGGLE_BASE)
+			b->expanded = expanded ? 1 : 0;
+		else if (b->id >= UI_ACT_MOON_BASE)
+			b->visible = expanded ? 1 : 0;
+	}
+}
+
+int uiPlanetExpanded(int planet)
+{
+	if (!uiReady)
+		return 0;
+	for (int i = 0; i < uiCount; i++)
+		if (buttons[i].planet == planet && buttons[i].id >= UI_ACT_TOGGLE_BASE)
+			return buttons[i].expanded;
+	return 0;
 }
 
 static int pointInRect(float x, float y, const float rect[4])
@@ -245,7 +353,7 @@ void uiSetMouse(float x, float y)
 	if (!uiReady)
 		return;
 	for (int i = 0; i < uiCount; i++)
-		buttons[i].hovered = pointInRect(x, y, buttons[i].rect);
+		buttons[i].hovered = (buttons[i].visible && pointInRect(x, y, buttons[i].rect)) ? 1 : 0;
 	for (int i = 0; i < sliderCount; i++)
 	{
 		sliders[i].hovered = pointInRect(x, y, sliders[i].rect);
@@ -259,7 +367,7 @@ int uiHitTest(float x, float y)
 	if (!uiReady)
 		return UI_ACT_NONE;
 	for (int i = 0; i < uiCount; i++)
-		if (pointInRect(x, y, buttons[i].rect))
+		if (buttons[i].visible && pointInRect(x, y, buttons[i].rect))
 			return buttons[i].id;
 	return UI_ACT_NONE;
 }
@@ -303,8 +411,19 @@ void uiDrawAll(int followedId, int pauseActive)
 	for (int i = 0; i < uiCount; i++)
 	{
 		uiButton *b = &buttons[i];
-		int active = (b->id == UI_ACT_PAUSE)
-			? pauseActive : (followedId == b->id);
+		if (!b->visible)
+			continue;   // collapsed moon buttons draw nothing
+
+		/* Active state: a toggle glows when its planet's row is expanded (and
+		   swaps to the closed chevron), the pause button when paused, and
+		   every sun/planet/moon button when it is the followed body. */
+		int active;
+		if (b->id >= UI_ACT_TOGGLE_BASE)
+			active = b->expanded;
+		else if (b->id == UI_ACT_PAUSE)
+			active = pauseActive;
+		else
+			active = (followedId == b->id);
 		float tint = active ? 0.5f : (b->hovered ? 0.25f : 0.0f);
 
 		/* Dark slot, slightly inset, behind the icon. */
@@ -358,6 +477,11 @@ void uiShutdown(void)
 	uiReady = 0;
 	for (int i = 0; i < uiCount; i++)
 	{
+		/* Only textures this button loaded are freed here; panel buttons
+		   (owned == 0) reference caller-owned textures (moon surfaces, the
+		   shared chevron icons) and must not be deleted. */
+		if (!buttons[i].owned)
+			continue;
 		if (buttons[i].texture)
 			glDeleteTextures(1, &buttons[i].texture);
 		if (buttons[i].textureActive)
