@@ -3,125 +3,143 @@
 obj ObjLoadModel(char *fname);
 obj newObj;
 
-obj ObjLoadModel(char *fname)
-{	
-	FILE *fp;
-	fp = fopen(fname, "r");
-	
-	char ch;
-	int read;
-	float x, y, z;
-	int ix, iy, iz;
-	int vertCount = 0;
-   	int faceCount = 0;
-   	int objectCount = 0;
-   	int i = 0;
-	int j = 0;
-	
-	if(!fp)
-   	{
-      	printf("Error while opening the file.\n");
-      	exit(1);
-   	}
-   	
-   	
-   	
-	while((ch = fgetc(fp)) != EOF)
+// First integer component of an OBJ face element. Handles "3", "3/7",
+// "3//7", "3/7/1" and the negative (relative) forms of each.
+static int faceIndex(char *token)
+{
+	int sign = 1;
+	int i = 0;
+	if(*token == '-')
 	{
-		read = fscanf(fp, "%c",&ch);
-		if(read == 1 && strncmp(&ch, "o ", 1) == 0)
-		{
-			objectCount+=1;
-			//printf("OBJECT COUNT: %d\n", objectCount);
-		}
-		if(read == 1 && ch == 'v')
-		{
-			fscanf(fp, "%f", &x);
-			fscanf(fp, "%f", &y);
-			fscanf(fp, "%f", &z);
-			vertCount++; 
-		}
-		if(read == 1 && ch == 'f')
-		{
-			fscanf(fp, "%d", &ix);
-			fscanf(fp, "%d", &iy);
-			fscanf(fp, "%d", &iz);
-			faceCount++;
-		}
+		sign = -1;
+		token++;
 	}
-	
+	while(*token >= '0' && *token <= '9')
+		i = i * 10 + (*token++ - '0');
+	return sign * i;
+}
+
+obj ObjLoadModel(char *fname)
+{
+	FILE *fp = fopen(fname, "r");
+	if(!fp)
+	{
+		printf("Error while opening the file.\n");
+		exit(1);
+	}
+
+	// Pass 1: count vertices and faces. Line-based scanning keeps this
+	// independent of whitespace parity (the old fgetc loop skipped chars).
+	char line[512];
+	int vertCount = 0;
+	int faceCount = 0;
+	while(fgets(line, sizeof(line), fp))
+	{
+		if(line[0] == 'v' && (line[1] == ' ' || line[1] == '\t'))
+			vertCount++;
+		else if(line[0] == 'f' && (line[1] == ' ' || line[1] == '\t'))
+			faceCount++;
+	}
 	rewind(fp);
-	
+
 	vec3 *verts = malloc(sizeof(vec3) * vertCount);
 	vec3 *faces = malloc(sizeof(vec3) * faceCount);
-	int breakCount= 0;
-	
-	while((ch = fgetc(fp)) != EOF)
+	int i = 0;
+	int j = 0;
+
+	// Pass 2: fill them. Only `v` and `f` matter; `vt`/`vn`/`o`/`mtllib`/
+	// comments are skipped by the prefix checks, and `f v/vt/vn` faces are
+	// reduced to their position indices so Blender exports load as-is.
+	while(fgets(line, sizeof(line), fp))
 	{
-		read = fscanf(fp, "%c",&ch);
-		if(read == 1 && ch == 'o' && breakCount == 1)
+		if(line[0] == 'v' && (line[1] == ' ' || line[1] == '\t'))
 		{
-			breakCount = 1;
-			
-		}
-		if(read == 1 && ch == 'v')
-		{
-			fscanf(fp, "%f", &x);
-			fscanf(fp, "%f", &y);
-			fscanf(fp, "%f", &z);
+			float x, y, z;
+			sscanf(line, "v %f %f %f", &x, &y, &z);
 			verts[i].x = x;
 			verts[i].y = y;
 			verts[i].z = z;
-			//printf("%f, %f, %f\n", verts[i].x, verts[i].y, verts[i].z);
 			i++;
 		}
-		if(read == 1 && ch == 'f')
+		else if(line[0] == 'f' && (line[1] == ' ' || line[1] == '\t'))
 		{
-			fscanf(fp, "%d", &ix);
-			fscanf(fp, "%d", &iy);
-			fscanf(fp, "%d", &iz);
-			faces[j].x = (float)ix;
-			faces[j].y = (float)iy;
-			faces[j].z = (float)iz;
-			//printf("%f, %f, %f\n", faces[j].x, faces[j].y, faces[j].z);
-			j++;
+			char *toks[3];
+			int nt = 0;
+			for(char *tok = strtok(line + 2, " \t\r\n"); tok && nt < 3; tok = strtok(NULL, " \t\r\n"))
+				toks[nt++] = tok;
+			if(nt >= 3)
+			{
+				faces[j].x = (float)faceIndex(toks[0]);
+				faces[j].y = (float)faceIndex(toks[1]);
+				faces[j].z = (float)faceIndex(toks[2]);
+				j++;
+			}
 		}
 	}
-	
+
 	fclose(fp);
-	
-	vec3 *normals = malloc(sizeof(vec3) * vertCount*3);
-	vec3 *points = malloc(sizeof(vec3) * vertCount*3);
-	vec3 one, two;
-	int Index = 0;
-	int a, b, c;
-	
-	newObj.normals = malloc(faceCount*3*sizeof(normals[0]));
-	newObj.points = malloc(faceCount*3*sizeof(points[0]));
-	
-	for(int i = 0; i < faceCount; i++)
+
+	// Mesh centroid, used to tell outward from inward face normals.
+	vec3 centroid = { 0.0f, 0.0f, 0.0f };
+	for(int k = 0; k < vertCount; k++)
 	{
-		a = (int)(faces[i].x-1);
-		b = (int)(faces[i].y-1);
-		c = (int)(faces[i].z-1);
-		
+		centroid.x += verts[k].x / (float)vertCount;
+		centroid.y += verts[k].y / (float)vertCount;
+		centroid.z += verts[k].z / (float)vertCount;
+	}
+
+	newObj.normals = malloc(faceCount*3*sizeof(vec3));
+	newObj.points = malloc(faceCount*3*sizeof(vec3));
+
+	int Index = 0;
+	for(int fi = 0; fi < faceCount; fi++)
+	{
+		// Negative indices are relative to the end of the vertex list.
+		int a = (int)faces[fi].x - 1;
+		int b = (int)faces[fi].y - 1;
+		int c = (int)faces[fi].z - 1;
+		if(a < 0) a += vertCount;
+		if(b < 0) b += vertCount;
+		if(c < 0) c += vertCount;
+
+		vec3 one, two;
 		one.x = verts[b].x - verts[a].x;
 		one.y = verts[b].y - verts[a].y;
 		one.z = verts[b].z - verts[a].z;
-	
+
 		two.x = verts[c].x - verts[b].x;
 		two.y = verts[c].y - verts[b].y;
 		two.z = verts[c].z - verts[b].z;
 
 		vec3 normal = normalizevec3(crossvec3(one, two));
 
+		// Enforce consistent outward winding (rocks/planets are convex and
+		// contain their centroid). Some exporters write CW faces, which would
+		// cull the visible side under the app's global GL_BACK culling and
+		// light the wrong face.
+		vec3 fc;
+		fc.x = (verts[a].x + verts[b].x + verts[c].x) / 3.0f - centroid.x;
+		fc.y = (verts[a].y + verts[b].y + verts[c].y) / 3.0f - centroid.y;
+		fc.z = (verts[a].z + verts[b].z + verts[c].z) / 3.0f - centroid.z;
+		if(normal.x * fc.x + normal.y * fc.y + normal.z * fc.z < 0.0f)
+		{
+			int t;
+			t = b; b = c; c = t;
+			normal.x = -normal.x;
+			normal.y = -normal.y;
+			normal.z = -normal.z;
+		}
+
 		newObj.normals[Index] = normal; newObj.points[Index] = verts[a]; Index++;
 		newObj.normals[Index] = normal; newObj.points[Index] = verts[b]; Index++;
 		newObj.normals[Index] = normal; newObj.points[Index] = verts[c]; Index++;
 	}
-	
-	newObj.size = Index*sizeof(points[0]);
-	newObj.nsize = Index*sizeof(normals[0]);
+
+	free(verts);
+	free(faces);
+
+	newObj.size = Index*sizeof(vec3);
+	newObj.nsize = Index*sizeof(vec3);
 	newObj.vertexNumber = Index;
 	return newObj;
 }

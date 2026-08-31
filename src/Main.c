@@ -80,6 +80,26 @@ GLuint sunQuadVAO, sunQuadVBO;
 GLuint orbitShader, orbitVAO, orbitVBO;
 GLuint ringVAO[11], ringVBO[11];
 ring ringArray[11];
+
+// GPU-instanced asteroid + Kuiper belts (initBelts/drawBelts). Each rock
+// carries its whole orbit as instance data; the vertex shader advances it
+// from uTime, so the belts cost two instanced draws per frame.
+typedef struct beltRockData {
+	float orbitRadius, height, angSpeed, phase;  // aOrbit
+	float scale, spinSpeed, spinPhase, tilt;     // aRock
+} beltRockData;
+
+typedef struct belt {
+	char *meshPath;
+	obj mesh;
+	GLuint vao, vbo, ibo;
+	int count;
+} belt;
+
+belt asteroidBelt;
+belt kuiperBelt;
+GLuint beltShader;
+float beltTime = 0.0f;
 GLuint shadowFBO, depthMap, rboDepth;
 GLuint ModelView, projection, model, view;
 mat4 p, v;
@@ -593,6 +613,90 @@ void initObject() {
 	glBindVertexArray(0);
 }
 
+// Tiny LCG: belts want a randomized-but-reproducible layout, and this keeps
+// the app's global rand() stream untouched.
+static unsigned int beltSeed = 0x5EEDB71u;
+static float beltRand()
+{
+	beltSeed = beltSeed * 1664525u + 1013904223u;
+	return (float)(beltSeed >> 8) / (float)(1u << 24);
+}
+
+void initBelt(belt *b, char *path, int count,
+	float rMin, float rMax, float maxHeight, float sMin, float sMax)
+{
+	b->meshPath = path;
+	b->count = count;
+	b->mesh = ObjLoadModel(path);
+
+	beltRockData *data = malloc(sizeof(beltRockData) * count);
+	for(int i = 0; i < count; i++)
+	{
+		// Orbit radius: uniform across the belt's annulus.
+		data[i].orbitRadius = rMin + beltRand() * (rMax - rMin);
+		// Small random height above/below the ecliptic.
+		data[i].height = (beltRand() * 2.0f - 1.0f) * maxHeight;
+		// Same angular-speed rule the planets use, 0.001f/period with
+		// period == radius/AU here, i.e. 0.002f/radiusUnits per tick,
+		// with +/-15% jitter so the belt doesn't rotate as one solid ring.
+		data[i].angSpeed = 0.002f / data[i].orbitRadius * (0.85f + 0.30f * beltRand());
+		data[i].phase = beltRand() * 6.2831853f;
+		data[i].scale = sMin + beltRand() * (sMax - sMin);
+		data[i].spinSpeed = (0.5f + beltRand()) * 0.01f;
+		if(beltRand() < 0.5f)
+			data[i].spinSpeed = -data[i].spinSpeed;
+		data[i].spinPhase = beltRand() * 6.2831853f;
+		data[i].tilt = (beltRand() * 2.0f - 1.0f) * 0.5f;
+	}
+
+	glGenVertexArrays(1, &b->vao);
+	glBindVertexArray(b->vao);
+
+	// Mesh stream: positions then normals (same layout as initObject).
+	glGenBuffers(1, &b->vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, b->vbo);
+	glBufferData(GL_ARRAY_BUFFER, b->mesh.size + b->mesh.nsize, NULL, GL_STATIC_DRAW);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, b->mesh.size, b->mesh.points);
+	glBufferSubData(GL_ARRAY_BUFFER, b->mesh.size, b->mesh.nsize, b->mesh.normals);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(0));
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(b->mesh.size));
+
+	// Instance stream: one beltRockData per rock, advanced per-instance.
+	glGenBuffers(1, &b->ibo);
+	glBindBuffer(GL_ARRAY_BUFFER, b->ibo);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(beltRockData) * count, data, GL_STATIC_DRAW);
+	glEnableVertexAttribArray(2);
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(beltRockData), BUFFER_OFFSET(0));
+	glVertexAttribDivisor(2, 1);
+	glEnableVertexAttribArray(3);
+	glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(beltRockData), BUFFER_OFFSET(4*sizeof(GLfloat)));
+	glVertexAttribDivisor(3, 1);
+
+	glBindVertexArray(0);
+	free(data);
+}
+
+void initBelts()
+{
+	createShader(&beltShader, "src/shaders/belt.vert",
+		"src/shaders/belt.frag");
+
+	beltSeed = 0x5EEDB71u;
+
+	// Main asteroid belt: between drawn Mars (1.88 * 2000 = 3760) and
+	// Jupiter (11.86 * 2000 = 23724).
+	initBelt(&asteroidBelt, "include/obj/asteroid.obj", 1500,
+		4200.0f, 6800.0f, 120.0f, 6.0f, 30.0f);
+	// Kuiper belt: past drawn Jupiter, kept inside the view frustum
+	// (zFar = 100000, camera distance max 25000) — the specced "past
+	// Neptune" range (Neptune draws at 329600) is beyond the far plane
+	// and can never be seen.
+	initBelt(&kuiperBelt, "include/obj/rock.obj", 1000,
+		35000.0f, 95000.0f, 1200.0f, 15.0f, 80.0f);
+}
+
 void initPlanet() {
 	createShader(&planetShader, "src/shaders/planet.vert",
 		"src/shaders/planet.frag");
@@ -908,6 +1012,8 @@ void init()
 	initSkybox();
 	fprintf(stderr, "[trace] init: object\n");
 	initObject();
+	fprintf(stderr, "[trace] init: belts\n");
+	initBelts();
 	fprintf(stderr, "[trace] init: atmosphere\n");
 	initAtmosphere();
 	initOrbits();
@@ -985,6 +1091,22 @@ void drawObj()
 	glBindVertexArray (objectVAO);
 	//glDrawArrays( GL_TRIANGLES, 0, object.vertexNumber );
     glBindVertexArray(0);
+}
+
+void drawBelts()
+{
+	glUseProgram(beltShader);
+	glUniformMatrix4fv(glGetUniformLocation(beltShader, "projection"), 1, GL_FALSE, &p.m[0][0]);
+	glUniformMatrix4fv(glGetUniformLocation(beltShader, "view"), 1, GL_FALSE, &v.m[0][0]);
+	glUniform1f(glGetUniformLocation(beltShader, "uTime"), beltTime);
+
+	belt *belts[2] = { &asteroidBelt, &kuiperBelt };
+	for(int i = 0; i < 2; i++)
+	{
+		glBindVertexArray(belts[i]->vao);
+		glDrawArraysInstanced(GL_TRIANGLES, 0, belts[i]->mesh.vertexNumber, belts[i]->count);
+		glBindVertexArray(0);
+	}
 }
 
 void bindTexture(GLuint activeTex, GLuint tex) {
@@ -1752,6 +1874,7 @@ int main(int argc, char *argv[])
 		drawAtmosphere();
 		//glFrontFace(GL_CCW);
 		drawObj();
+		drawBelts();
 		drawMoon();
 		// Corona halo last: additive, no depth write, so it blends over
 		// anything behind it while still being occluded by anything in front.
@@ -1773,6 +1896,7 @@ int main(int argc, char *argv[])
 			{
 				moonOrbitSpeedArray[i] += 0.0001f/moonInstanceArray[i].orbit;
 			}
+			beltTime += 1.0f;
 			theta += 0.009f;
 		}
 
@@ -1793,6 +1917,13 @@ int main(int argc, char *argv[])
 			glDeleteTextures(1, &planetInstanceArray[i].ringTex);
 		}
 	}
+
+	glDeleteVertexArrays(1, &asteroidBelt.vao);
+	glDeleteBuffers(1, &asteroidBelt.vbo);
+	glDeleteBuffers(1, &asteroidBelt.ibo);
+	glDeleteVertexArrays(1, &kuiperBelt.vao);
+	glDeleteBuffers(1, &kuiperBelt.vbo);
+	glDeleteBuffers(1, &kuiperBelt.ibo);
 
 	uiShutdown();
 	/* Chevron icons are shared, caller-owned textures (owned == 0 in the
