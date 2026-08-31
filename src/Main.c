@@ -101,24 +101,24 @@ belt kuiperBelt;
 GLuint beltShader;
 float beltTime = 0.0f;
 
-// Parabolic-orbit comet with a billboarded particle tail (initComets /
+// Highly-eccentric-ellipse comet with a billboarded particle tail (initComets /
 // updateComet / drawComets). The nucleus is a small rock; the tail is a fan
 // of camera-facing soft sprites run anti-sunward from the nucleus, with
 // length and brightness both proportional to 1/r^2.
 // Number of comets in the scene. Each gets its own perihelion distance,
-// approach angle, orbit phase, and speed (seeded in initComets), so they
-// cross the system at different intervals from different directions.
+// aphelion distance, approach angle, orbit phase, and speed (seeded in
+// initComets), so they cross the system at different intervals from
+// different directions.
 #define COMET_COUNT        3
-// Each comet is a parabolic pass around the sun (sun at the focus). To read as
-// a "dive toward the sun" rather than a planet-like orbit, its visibility is
-// tied to distance from the sun exactly like a real comet: fully bright close
-// in, smoothly fading to invisible beyond COMET_VIS_FAR * q. The geometric pass
-// extends to COMET_GEOM_FAR * q so the in/out reset happens while faded out.
-// Because the 1/r^2 Kepler speed makes it linger far out (hidden), what the eye
-// catches is the fast, bright close pass, not a slow distant crawl. Keeping this
-// tight (~2.5q) means there is no "faint dot drifting in the distance" at all.
+// Each comet is a flat highly-eccentric ellipse (sun at the focus): a close
+// perihelion q (dive into the sun) and a far aphelion (long arc out into the
+// system). Its visibility is tied to distance from the sun exactly like a
+// real comet: fully bright close in, smoothly fading to invisible beyond
+// COMET_VIS_FAR * q. The full anomaly wrap at +/-PI happens at aphelion while
+// faded out, so the slow far arc is never seen and what the eye catches is
+// the fast, bright close pass. Keeping this tight (~2.6q) means there is no
+// "faint dot drifting in the distance" at all.
 #define COMET_VIS_FAR      2.6f      // invisible beyond this many perihelion distances
-#define COMET_GEOM_FAR     5.5f      // anomaly bound of the geometric pass (reset hides here)
 #define COMET_TAIL_MAX     12000.0f  // tail length at perihelion
 #define COMET_ORBIT_K      70000.0f  // base speed; dTheta/frame = K / r^2, scaled per comet
 #define COMET_PARTICLES    132
@@ -130,10 +130,11 @@ typedef struct comet {
 	GLuint tailVao, quadVbo, tailVbo;
 	int  particleCount;
 	float theta;              // true anomaly (rad from perihelion), decreasing
-	float thetaSpawn;         // anomaly at the spawn/respawn distance
-	float p;                  // semi-latus rectum = 2 q
+	float q;                  // perihelion distance
+	float e;                  // eccentricity = (rA - q) / (rA + q)
+	float p;                  // semi-latus rectum = q (1 + e)
 	float dir;                // orientation: world angle of perihelion (rad)
-	float orbitK;             // per-comet speed (dTheta/frame = orbitK / r^2)
+	float orbitK;             // per-comet speed (dTheta per 60-Hz reference frame = orbitK / r^2)
 	float spin;
 	// Per-frame derived state (set by updateComet, read by drawComets).
 	vec3 pos;
@@ -150,7 +151,7 @@ GLuint cometShader, tailShader;
 void initMVP(int shader, mat4 m, mat4 v);
 
 void initComets();
-void updateComet(comet *c);
+void updateComet(comet *c, float timeScale);
 void drawComets();
 GLuint shadowFBO, depthMap, rboDepth;
 GLuint ModelView, projection, model, view;
@@ -159,6 +160,7 @@ mat4 p, v;
 GLfloat deltaTime = 0.0f;
 GLfloat lastFrame = 0.0f;
 int stopRotation = 0;
+int gFrame = 0;   // bumped once per render-loop iteration; keys the initMVP cache
 
 /* Camera follow state, set by the UI buttons. The value is the same space as
    a uiHitTest result (and a uiButton id), so each trackable body has one:
@@ -757,19 +759,25 @@ void initComets()
 		"src/shaders/tail.frag");
 
 	// Per-comet seeds. q (perihelion distance) sets how close each one dips to
-	// the sun. dir aims each perihelion into the camera-facing hemisphere
+	// the sun; rA (aphelion distance) sets how far out the ellipse arcs before
+	// looping back. dir aims each perihelion into the camera-facing hemisphere
 	// (world +z, ahead of the default camera at +5000) so the bright near-sun
 	// pass happens in FRONT of the sun rather than behind it, from a different
 	// side each time. phase is the starting point along the orbit (a fraction
-	// of thetaSpawn) so the three arrive at different intervals, and kMult sets
-	// each orbit's tempo so they never re-sync into a lockstep pass.
+	// of PI, i.e. a fraction of the half orbit) so the three arrive at
+	// different intervals, and kMult sets each orbit's tempo so they never
+	// re-sync into a lockstep pass.
 	// Perihelion distance q: kept close to the sun (glow is 3000) so the pass
 	// visibly dives into the sun. Each perihelion keeps z>0 (in front of the
 	// sun, between it and the default camera at z=5000) so it is seen crossing
 	// the sun's face rather than hidden behind it.
-	static const float seedQ[]     = { 1800.0f, 2600.0f, 3400.0f };
+	static const float seedQ[]  = { 1500.0f, 2600.0f, 3400.0f };
+	// Aphelion distance rA: arcs far out into the system (the Kuiper belt
+	// draws at 35000..95000 and the far plane is 100000), then returns on the
+	// closed ellipse. Larger rA = more eccentric, longer hidden far stretch.
+	static const float seedRA[] = { 46000.0f, 38000.0f, 58000.0f };
 	// Perihelion world angle. z = q*sin(dir) stays in (0, 5000):
-	//   #0 right  (1580, 863)   #1 left   (-1917, 1756)   #2 right (3194, 1166)
+	//   #0 right  (1336, 705)   #1 left   (-2256, 1756)   #2 right (3205, 1166)
 	static const float seedDir[]   = {   0.5f,   2.4f,     0.35f  };
 	static const float seedPhase[] = {  0.80f,  0.30f,  -0.45f };
 	static const float seedKMult[] = {  1.00f,  1.35f,  0.75f };
@@ -780,13 +788,14 @@ void initComets()
 	c->mesh = ObjLoadModel("include/obj/rock.obj");
 	c->particleCount = COMET_PARTICLES;
 
-	// Parabolic geometry: p = 2q, and the geometric pass is cut off at
-	// r = COMET_GEOM_FAR * q. r(theta) = p / (1 + cos(theta)); solving
-	// r = GEOM_FAR*q gives thetaSpawn, the true-anomaly bound.
-	c->p = 2.0f * seedQ[ci];
-	c->thetaSpawn = acosf(2.0f / COMET_GEOM_FAR - 1.0f);
+	// Ellipse geometry, sun at the focus: e = (rA - q)/(rA + q), p = q(1+e).
+	// r(theta) = p / (1 + e cos(theta)); theta spans the full -PI..+PI, with
+	// perihelion at 0 and aphelion at +/-PI.
+	c->q = seedQ[ci];
+	c->e = (seedRA[ci] - seedQ[ci]) / (seedRA[ci] + seedQ[ci]);
+	c->p = seedQ[ci] * (1.0f + c->e);
 	c->dir = seedDir[ci];
-	c->theta = seedPhase[ci] * c->thetaSpawn; // stagger the three comets
+	c->theta = seedPhase[ci] * 3.14159265358979f; // stagger the three comets
 	c->orbitK = COMET_ORBIT_K * seedKMult[ci];
 	c->spin = beltRand() * 6.2832f;
 
@@ -844,27 +853,29 @@ void initComets()
 	glVertexAttribDivisor(2, 1);
 
 	glBindVertexArray(0);
-	updateComet(c);
+	updateComet(c, 1.0f);   // one reference-frame step to seed initial pose
 	}
 }
 
-void updateComet(comet *c)
+void updateComet(comet *c, float timeScale)
 {
-	// Parabolic orbit, sun at the focus (origin): r = p / (1 + cos theta).
-	// Advance theta by K/r^2 per frame: equal-area-in-equal-time, so it
-	// whips around perihelion and crawls far out, like a real comet. The
-	// whole conic is rotated by c->dir so perihelion points along a chosen
+	// Ellipse, sun at the focus (origin): r = p / (1 + e cos theta), with
+	// perihelion at theta = 0 and aphelion at theta = +/-PI. Advance theta by
+	// K/r^2 per 60-Hz reference frame, scaled by timeScale:
+	// equal-area-in-equal-time, so it whips around perihelion and crawls far
+	// out, like a real comet, at a real-time constant pace regardless of fps.
+	// The whole conic is rotated by c->dir so perihelion points along a chosen
 	// world direction (kept near the default camera's line of sight).
 	float ang = c->theta + c->dir;
-	float r = c->p / (1.0f + cosf(c->theta));
+	float r = c->p / (1.0f + c->e * cosf(c->theta));
 	float dTheta = c->orbitK / (r * r);
-	c->theta -= dTheta;
-	if(c->theta < -c->thetaSpawn)
-		c->theta = c->thetaSpawn; // one parabolic pass done; swing it back
-	c->spin += 0.005f;
+	c->theta -= dTheta * timeScale;
+	if(c->theta < -3.14159265358979f)
+		c->theta += 6.28318530717959f; // wrap at aphelion: same point, no visible reset
+	c->spin += 0.005f * timeScale;
 
 	ang = c->theta + c->dir;
-	r = c->p / (1.0f + cosf(c->theta));
+	r = c->p / (1.0f + c->e * cosf(c->theta));
 	c->r = r;
 	c->pos.x = r * cosf(ang);
 	c->pos.y = 0.0f;
@@ -875,7 +886,7 @@ void updateComet(comet *c)
 	c->tailDir.x = c->pos.x / r;
 	c->tailDir.y = c->pos.y / r;
 	c->tailDir.z = c->pos.z / r;
-	float q = c->p * 0.5f;
+	float q = c->q;
 	float falloff = (q / r) * (q / r);
 	c->tailLen = COMET_TAIL_MAX * falloff;
 	c->tailWidth = 0.18f * c->tailLen;
@@ -897,7 +908,7 @@ void drawComets()
 	{
 	comet *c = &comets[ci];
 	if(c->vis < 0.02f)
-		continue;   // faded out at a pass end; skip so the reset is never seen
+		continue;   // faded out on the far arc; skipped so the distant crawl is never drawn
 
 	// Nucleus: alpha-faded by the pass-end window (uFade), writes depth.
 	glUseProgram(cometShader);
@@ -917,7 +928,7 @@ void drawComets()
 	glUseProgram(tailShader);
 	{
 		float r = c->r > 0.0f ? c->r : 1.0f;
-		float falloff = (c->p * 0.5f / r) * (c->p * 0.5f / r);
+		float falloff = (c->q / r) * (c->q / r);
 		glUniformMatrix4fv(glGetUniformLocation(tailShader, "projection"), 1, GL_FALSE, &p.m[0][0]);
 		glUniformMatrix4fv(glGetUniformLocation(tailShader, "view"), 1, GL_FALSE, &v.m[0][0]);
 		glUniform3f(glGetUniformLocation(tailShader, "uNucleus"), c->pos.x, c->pos.y, c->pos.z);
@@ -1300,11 +1311,26 @@ void setupLighting(int program)
 	glUniform1f ( glGetUniformLocation(program, "shininess"), material_shininess );
 }
 
+static int   mvpLastProg = -1, mvpLastFrame = -1;
+static GLint mvpLProj, mvpLModel, mvpLView;
+
+/* p/v are identical for every call in a frame; only m differs. Keying the
+   cache on (program, frame) uploads projection/view once per program per
+   frame. Never drop the frame key: a mid-frame program switch must
+   refetch, or the cached locations would belong to another program. */
 void initMVP(int shader, mat4 m, mat4 v)
 {
-	glUniformMatrix4fv(glGetUniformLocation( shader, "projection" ), 1, GL_FALSE, &p.m[0][0]);
-	glUniformMatrix4fv( glGetUniformLocation( shader, "model" ), 1, GL_FALSE, &m.m[0][0] );
-	glUniformMatrix4fv( glGetUniformLocation( shader, "view" ), 1, GL_FALSE, &v.m[0][0] );
+	if (shader != mvpLastProg || gFrame != mvpLastFrame)
+	{
+		mvpLProj   = glGetUniformLocation( shader, "projection" );
+		mvpLView   = glGetUniformLocation( shader, "view" );
+		mvpLModel  = glGetUniformLocation( shader, "model" );
+		glUniformMatrix4fv(mvpLProj, 1, GL_FALSE, &p.m[0][0]);
+		glUniformMatrix4fv(mvpLView, 1, GL_FALSE, &v.m[0][0]);
+		mvpLastProg  = shader;
+		mvpLastFrame = gFrame;
+	}
+	glUniformMatrix4fv( mvpLModel, 1, GL_FALSE, &m.m[0][0] );
 }
 
 void drawSkybox(skyboxTexture)
@@ -1327,19 +1353,6 @@ void drawSkybox(skyboxTexture)
     glBindVertexArray(0);
 
     glDepthMask(GL_TRUE);
-}
-
-void drawObj()
-{
-	glUseProgram(planetShader);
-	//mat4 rx = multiplymat4(translate(0.0, 0.0, -15.0), rotationSpace());
-	mat4 m = scale(100);//rx;//multiplymat4(rx, rotateY(90));
-
-	initMVP(planetShader, m, v);
-
-	glBindVertexArray (objectVAO);
-	//glDrawArrays( GL_TRIANGLES, 0, object.vertexNumber );
-    glBindVertexArray(0);
 }
 
 void drawBelts()
@@ -1668,7 +1681,7 @@ GLFWwindow *setupGLFW() {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
 	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-	glfwWindowHint(GLFW_SAMPLES, 4);
+	glfwWindowHint(GLFW_SAMPLES, 2);
 
 	fprintf(stderr, "[trace] glfw: creating window\n");
 	/* Bordered fullscreen: normal decorated window, maximized after
@@ -1706,6 +1719,7 @@ GLFWwindow *setupGLFW() {
 		exit(1);
 	}
 	fprintf(stderr, "[trace] gl: version = %s\n", (const char *)glGetString(GL_VERSION));
+	glfwSwapInterval(1);
 #endif
 	//glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_ENABLED);
 	glfwSetKeyCallback(window, key_callback);
@@ -2088,6 +2102,7 @@ int main(int argc, char *argv[])
 		GLfloat currentFrame = (float)glfwGetTime();
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
+        gFrame++;
         updateCameraFollow();
         v = getViewMatrix();
 
@@ -2102,7 +2117,6 @@ int main(int argc, char *argv[])
 		glfwPollEvents();
 		doMovement();
 
-		glfwPollEvents();
 		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		{
@@ -2119,11 +2133,10 @@ int main(int argc, char *argv[])
 		drawPlanet();
 		drawOrbits();
 		drawPlanetRing();
+		drawBelts();
 		//glFrontFace(GL_CW);
 		drawAtmosphere();
 		//glFrontFace(GL_CCW);
-		drawObj();
-		drawBelts();
 		drawComets();
 		drawMoon();
 		// Corona halo last: additive, no depth write, so it blends over
@@ -2134,22 +2147,30 @@ int main(int argc, char *argv[])
 		uiDrawAll(followTarget, stopRotation);
 
 		if(stopRotation == 0){
+			// Frame-rate independent motion: the tuning constants below are
+			// per-60-Hz-frame steps; timeScale = 60*deltaTime advances them
+			// by the correct amount of real time at any fps. Clamped so the
+			// first frame (deltaTime spans the whole texture load) and long
+			// stalls advance a few steps, not a teleport.
+			float timeScale = deltaTime * 60.0f;
+			if (timeScale > 4.0f)
+				timeScale = 4.0f;
 			for(int i = 0; i < 11; i++)
 			{
-				orbitSpeedArray[i] += 0.001f/planetInstanceArray[i].orbit;
+				orbitSpeedArray[i] += 0.001f/planetInstanceArray[i].orbit * timeScale;
 			}
 			for(int i = 0; i < 11; i++)
 			{
-				rotationSpeedArray[i] += 0.001f/planetInstanceArray[i].day;
+				rotationSpeedArray[i] += 0.001f/planetInstanceArray[i].day * timeScale;
 			}
 			for(int i = 0; i < loadedMoonCount; i++)
 			{
-				moonOrbitSpeedArray[i] += 0.0001f/moonInstanceArray[i].orbit;
+				moonOrbitSpeedArray[i] += 0.0001f/moonInstanceArray[i].orbit * timeScale;
 			}
-			beltTime += 1.0f;
+			beltTime += timeScale;
 			for(int ci = 0; ci < COMET_COUNT; ci++)
-				updateComet(&comets[ci]);
-			theta += 0.009f;
+				updateComet(&comets[ci], timeScale);
+			theta += 0.009f * timeScale;
 		}
 
 		glfwSwapBuffers(window);

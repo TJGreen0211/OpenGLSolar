@@ -42,6 +42,16 @@ void main()
 	// extent, which spans sunHalf NDC units on each side of the centre.
 	vec2 starOffset = ( fragNdc - sunNdc ) * ( 2.0 / max( sunHalf, 1e-4 ) );
 
+	// Early-out before the 16-octave noise: it only matters near the sun.
+	// disc pass: radius is always <= 0.34 (0.24 + brightness*0.2,
+	//            brightness <= 0.5) -> 0.35 is a safe tight bound.
+	// corona pass: the halo term is exactly 0 at dist >= ~0.61, starGlow
+	//              is 0 at dist >= 2, and the f-term residual beyond
+	//              dist 2 is < 1% of orange -> 2.0 loses nothing visible.
+	vec2 earlyP = vec2( starOffset.x * aspect * 0.5, starOffset.y * 0.5 );
+	if ( uDisc > 0.5 ) { if ( length( earlyP ) >= 0.35 ) discard; }
+	else               { if ( length( earlyP ) > 2.0 )    discard; }
+
 	float freqs[4];
 	freqs[0] = texture( normalTex, vec2( 0.01, 0.25 ) ).x;
 	freqs[1] = texture( normalTex, vec2( 0.07, 0.25 ) ).x;

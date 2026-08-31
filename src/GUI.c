@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 static GLuint UIShader;
+static GLint uiLRect, uiLColor, uiLHasTex, uiLTint, uiLAlpha, uiLViewport, uiLTex;
 static GLuint UIvao, UIvbo;
 static uiButton buttons[UI_MAX_BUTTONS];
 static int uiCount = 0;
@@ -15,6 +16,13 @@ void attachGUIShaders()
 {
 	createShader(&UIShader, "src/shaders/UI.vert",
 		"src/shaders/UI.frag");
+	uiLRect = glGetUniformLocation(UIShader, "uRect");
+	uiLColor = glGetUniformLocation(UIShader, "uColor");
+	uiLHasTex = glGetUniformLocation(UIShader, "uHasTex");
+	uiLTint = glGetUniformLocation(UIShader, "uTint");
+	uiLAlpha = glGetUniformLocation(UIShader, "uAlpha");
+	uiLViewport = glGetUniformLocation(UIShader, "uViewport");
+	uiLTex = glGetUniformLocation(UIShader, "uTex");
 }
 
 static int uiFileExists(const char *path)
@@ -376,11 +384,11 @@ int uiHitTest(float x, float y)
 static void uiDrawFlat(float x, float y, float w, float h,
 	float r, float g, float b, float a, float tint)
 {
-	glUniform4f(glGetUniformLocation(UIShader, "uRect"), x, y, w, h);
-	glUniform4f(glGetUniformLocation(UIShader, "uColor"), r, g, b, a);
-	glUniform1f(glGetUniformLocation(UIShader, "uHasTex"), 0.0f);
-	glUniform1f(glGetUniformLocation(UIShader, "uTint"), tint);
-	glUniform1f(glGetUniformLocation(UIShader, "uAlpha"), 1.0f);
+	glUniform4f(uiLRect, x, y, w, h);
+	glUniform4f(uiLColor, r, g, b, a);
+	glUniform1f(uiLHasTex, 0.0f);
+	glUniform1f(uiLTint, tint);
+	glUniform1f(uiLAlpha, 1.0f);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
@@ -395,9 +403,8 @@ void uiDrawAll(int followedId, int pauseActive)
 	glGetIntegerv(GL_VIEWPORT, viewport);
 
 	glUseProgram(UIShader);
-	glUniform2f(glGetUniformLocation(UIShader, "uViewport"),
-		(float)viewport[2], (float)viewport[3]);
-	glUniform1i(glGetUniformLocation(UIShader, "uTex"), 0);
+	glUniform2f(uiLViewport, (float)viewport[2], (float)viewport[3]);
+	glUniform1i(uiLTex, 0);
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -435,9 +442,9 @@ void uiDrawAll(int followedId, int pauseActive)
 		/* Icon on top; the active pause state swaps in its pressed texture. */
 		GLuint tex = (active && b->textureActive) ? b->textureActive : b->texture;
 		glBindTexture(GL_TEXTURE_2D, tex);
-		glUniform4f(glGetUniformLocation(UIShader, "uRect"),
+		glUniform4f(uiLRect,
 			b->rect[0], b->rect[1], b->rect[2], b->rect[3]);
-		glUniform1f(glGetUniformLocation(UIShader, "uHasTex"), 1.0f);
+		glUniform1f(uiLHasTex, 1.0f);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 	}
 
