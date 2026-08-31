@@ -100,6 +100,58 @@ belt asteroidBelt;
 belt kuiperBelt;
 GLuint beltShader;
 float beltTime = 0.0f;
+
+// Parabolic-orbit comet with a billboarded particle tail (initComets /
+// updateComet / drawComets). The nucleus is a small rock; the tail is a fan
+// of camera-facing soft sprites run anti-sunward from the nucleus, with
+// length and brightness both proportional to 1/r^2.
+// Number of comets in the scene. Each gets its own perihelion distance,
+// approach angle, orbit phase, and speed (seeded in initComets), so they
+// cross the system at different intervals from different directions.
+#define COMET_COUNT        3
+// Each comet is a parabolic pass around the sun (sun at the focus). To read as
+// a "dive toward the sun" rather than a planet-like orbit, its visibility is
+// tied to distance from the sun exactly like a real comet: fully bright close
+// in, smoothly fading to invisible beyond COMET_VIS_FAR * q. The geometric pass
+// extends to COMET_GEOM_FAR * q so the in/out reset happens while faded out.
+// Because the 1/r^2 Kepler speed makes it linger far out (hidden), what the eye
+// catches is the fast, bright close pass, not a slow distant crawl. Keeping this
+// tight (~2.5q) means there is no "faint dot drifting in the distance" at all.
+#define COMET_VIS_FAR      2.6f      // invisible beyond this many perihelion distances
+#define COMET_GEOM_FAR     5.5f      // anomaly bound of the geometric pass (reset hides here)
+#define COMET_TAIL_MAX     12000.0f  // tail length at perihelion
+#define COMET_ORBIT_K      70000.0f  // base speed; dTheta/frame = K / r^2, scaled per comet
+#define COMET_PARTICLES    132
+#define COMET_NUCLEUS_SCALE 14.0f
+
+typedef struct comet {
+	obj mesh;
+	GLuint vao, vbo;          // nucleus: positions + normals
+	GLuint tailVao, quadVbo, tailVbo;
+	int  particleCount;
+	float theta;              // true anomaly (rad from perihelion), decreasing
+	float thetaSpawn;         // anomaly at the spawn/respawn distance
+	float p;                  // semi-latus rectum = 2 q
+	float dir;                // orientation: world angle of perihelion (rad)
+	float orbitK;             // per-comet speed (dTheta/frame = orbitK / r^2)
+	float spin;
+	// Per-frame derived state (set by updateComet, read by drawComets).
+	vec3 pos;
+	float r;
+	vec3 tailDir;
+	float tailLen, tailWidth, tailAlpha;
+	float vis;                  // 0..1 distance-based visibility (bright in, fades out)
+} comet;
+
+comet comets[COMET_COUNT];
+GLuint cometShader, tailShader;
+
+// Defined further down; drawn before initMVP's definition, so forward-declare.
+void initMVP(int shader, mat4 m, mat4 v);
+
+void initComets();
+void updateComet(comet *c);
+void drawComets();
 GLuint shadowFBO, depthMap, rboDepth;
 GLuint ModelView, projection, model, view;
 mat4 p, v;
@@ -697,6 +749,201 @@ void initBelts()
 		35000.0f, 95000.0f, 1200.0f, 15.0f, 80.0f);
 }
 
+void initComets()
+{
+	createShader(&cometShader, "src/shaders/comet.vert",
+		"src/shaders/comet.frag");
+	createShader(&tailShader, "src/shaders/tail.vert",
+		"src/shaders/tail.frag");
+
+	// Per-comet seeds. q (perihelion distance) sets how close each one dips to
+	// the sun. dir aims each perihelion into the camera-facing hemisphere
+	// (world +z, ahead of the default camera at +5000) so the bright near-sun
+	// pass happens in FRONT of the sun rather than behind it, from a different
+	// side each time. phase is the starting point along the orbit (a fraction
+	// of thetaSpawn) so the three arrive at different intervals, and kMult sets
+	// each orbit's tempo so they never re-sync into a lockstep pass.
+	// Perihelion distance q: kept close to the sun (glow is 3000) so the pass
+	// visibly dives into the sun. Each perihelion keeps z>0 (in front of the
+	// sun, between it and the default camera at z=5000) so it is seen crossing
+	// the sun's face rather than hidden behind it.
+	static const float seedQ[]     = { 1800.0f, 2600.0f, 3400.0f };
+	// Perihelion world angle. z = q*sin(dir) stays in (0, 5000):
+	//   #0 right  (1580, 863)   #1 left   (-1917, 1756)   #2 right (3194, 1166)
+	static const float seedDir[]   = {   0.5f,   2.4f,     0.35f  };
+	static const float seedPhase[] = {  0.80f,  0.30f,  -0.45f };
+	static const float seedKMult[] = {  1.00f,  1.35f,  0.75f };
+
+	for(int ci = 0; ci < COMET_COUNT; ci++)
+	{
+	comet *c = &comets[ci];
+	c->mesh = ObjLoadModel("include/obj/rock.obj");
+	c->particleCount = COMET_PARTICLES;
+
+	// Parabolic geometry: p = 2q, and the geometric pass is cut off at
+	// r = COMET_GEOM_FAR * q. r(theta) = p / (1 + cos(theta)); solving
+	// r = GEOM_FAR*q gives thetaSpawn, the true-anomaly bound.
+	c->p = 2.0f * seedQ[ci];
+	c->thetaSpawn = acosf(2.0f / COMET_GEOM_FAR - 1.0f);
+	c->dir = seedDir[ci];
+	c->theta = seedPhase[ci] * c->thetaSpawn; // stagger the three comets
+	c->orbitK = COMET_ORBIT_K * seedKMult[ci];
+	c->spin = beltRand() * 6.2832f;
+
+	// Nucleus VAO: positions then normals (same layout as initBelt).
+	glGenVertexArrays(1, &c->vao);
+	glBindVertexArray(c->vao);
+	glGenBuffers(1, &c->vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, c->vbo);
+	glBufferData(GL_ARRAY_BUFFER, c->mesh.size + c->mesh.nsize, NULL, GL_STATIC_DRAW);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, c->mesh.size, c->mesh.points);
+	glBufferSubData(GL_ARRAY_BUFFER, c->mesh.size, c->mesh.nsize, c->mesh.normals);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(0));
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(c->mesh.size));
+
+	// Tail: a shared billboard quad (two triangles, corners in -0.5..0.5)
+	// instanced once per particle.
+	static const float quad[] = {
+		-0.5f, -0.5f,   0.5f, -0.5f,   0.5f, 0.5f,
+		-0.5f, -0.5f,   0.5f,  0.5f,  -0.5f, 0.5f
+	};
+	glGenVertexArrays(1, &c->tailVao);
+	glBindVertexArray(c->tailVao);
+	glGenBuffers(1, &c->quadVbo);
+	glBindBuffer(GL_ARRAY_BUFFER, c->quadVbo);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2*sizeof(GLfloat), BUFFER_OFFSET(0));
+
+	// Per-particle instance data: aFracJit (frac, jx, jy) + aSizeAlpha.
+	int n = c->particleCount;
+	float *inst = malloc(sizeof(float) * 5 * n);
+	for(int i = 0; i < n; i++)
+	{
+		float frac = (float)i / (float)(n - 1);
+		// Sprites are large and dense near the head (the coma) and thin out
+		// toward the tip; alpha falls off the same way (see tail.vert).
+		float size = (24.0f + 150.0f * (1.0f - frac)) * (0.7f + 0.6f * beltRand());
+		inst[5*i + 0] = frac;
+		inst[5*i + 1] = beltRand() * 2.0f - 1.0f;
+		inst[5*i + 2] = beltRand() * 2.0f - 1.0f;
+		inst[5*i + 3] = size;
+		inst[5*i + 4] = 0.5f + 0.5f * beltRand();
+	}
+	glGenBuffers(1, &c->tailVbo);
+	glBindBuffer(GL_ARRAY_BUFFER, c->tailVbo);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 5 * n, inst, GL_STATIC_DRAW);
+	free(inst);
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5*sizeof(GLfloat), BUFFER_OFFSET(0));
+	glVertexAttribDivisor(1, 1);
+	glEnableVertexAttribArray(2);
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 5*sizeof(GLfloat), BUFFER_OFFSET(3*sizeof(GLfloat)));
+	glVertexAttribDivisor(2, 1);
+
+	glBindVertexArray(0);
+	updateComet(c);
+	}
+}
+
+void updateComet(comet *c)
+{
+	// Parabolic orbit, sun at the focus (origin): r = p / (1 + cos theta).
+	// Advance theta by K/r^2 per frame: equal-area-in-equal-time, so it
+	// whips around perihelion and crawls far out, like a real comet. The
+	// whole conic is rotated by c->dir so perihelion points along a chosen
+	// world direction (kept near the default camera's line of sight).
+	float ang = c->theta + c->dir;
+	float r = c->p / (1.0f + cosf(c->theta));
+	float dTheta = c->orbitK / (r * r);
+	c->theta -= dTheta;
+	if(c->theta < -c->thetaSpawn)
+		c->theta = c->thetaSpawn; // one parabolic pass done; swing it back
+	c->spin += 0.005f;
+
+	ang = c->theta + c->dir;
+	r = c->p / (1.0f + cosf(c->theta));
+	c->r = r;
+	c->pos.x = r * cosf(ang);
+	c->pos.y = 0.0f;
+	c->pos.z = r * sinf(ang);
+
+	// Tail: anti-sunward (the sun is at the origin), length and brightness
+	// both proportional to 1/r^2, peaking at perihelion.
+	c->tailDir.x = c->pos.x / r;
+	c->tailDir.y = c->pos.y / r;
+	c->tailDir.z = c->pos.z / r;
+	float q = c->p * 0.5f;
+	float falloff = (q / r) * (q / r);
+	c->tailLen = COMET_TAIL_MAX * falloff;
+	c->tailWidth = 0.18f * c->tailLen;
+	c->tailAlpha = falloff;
+
+	// Distance-based visibility (like a real comet): fully bright at the
+	// perihelion distance q, smoothly faded to 0 beyond COMET_VIS_FAR * q.
+	// The slow far-out crawl happens while invisible, so only the fast,
+	// bright close pass is seen.
+	float rFar = COMET_VIS_FAR * q;
+	float t = (rFar - r) / (rFar - q);
+	t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+	c->vis = t * t * (3.0f - 2.0f * t);
+}
+
+void drawComets()
+{
+	for(int ci = 0; ci < COMET_COUNT; ci++)
+	{
+	comet *c = &comets[ci];
+	if(c->vis < 0.02f)
+		continue;   // faded out at a pass end; skip so the reset is never seen
+
+	// Nucleus: alpha-faded by the pass-end window (uFade), writes depth.
+	glUseProgram(cometShader);
+	glUniform1f(glGetUniformLocation(cometShader, "uFade"), c->vis);
+	mat4 m = multiplymat4(multiplymat4(translatevec3(c->pos), rotateY(c->spin)),
+		scale(COMET_NUCLEUS_SCALE));
+	initMVP(cometShader, m, v);
+	glBindVertexArray(c->vao);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glDrawArrays(GL_TRIANGLES, 0, c->mesh.vertexNumber);
+	glDisable(GL_BLEND);
+	glBindVertexArray(0);
+
+	// Tail: additive camera-facing sprites; depth-tested so a closer planet
+	// hides it, but no depth write so the sky behind stays visible.
+	glUseProgram(tailShader);
+	{
+		float r = c->r > 0.0f ? c->r : 1.0f;
+		float falloff = (c->p * 0.5f / r) * (c->p * 0.5f / r);
+		glUniformMatrix4fv(glGetUniformLocation(tailShader, "projection"), 1, GL_FALSE, &p.m[0][0]);
+		glUniformMatrix4fv(glGetUniformLocation(tailShader, "view"), 1, GL_FALSE, &v.m[0][0]);
+		glUniform3f(glGetUniformLocation(tailShader, "uNucleus"), c->pos.x, c->pos.y, c->pos.z);
+		glUniform3f(glGetUniformLocation(tailShader, "uTailDir"),
+			c->pos.x / r, c->pos.y / r, c->pos.z / r);
+		glUniform1f(glGetUniformLocation(tailShader, "uTailLen"), COMET_TAIL_MAX * falloff);
+		glUniform1f(glGetUniformLocation(tailShader, "uTailWidth"), 0.18f * COMET_TAIL_MAX * falloff);
+		glUniform1f(glGetUniformLocation(tailShader, "uTailAlpha"), falloff * c->vis);
+		glUniform3f(glGetUniformLocation(tailShader, "uColor"), 0.55f, 0.75f, 1.0f);
+
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+		glDisable(GL_CULL_FACE);
+		glDepthMask(GL_FALSE);
+
+		glBindVertexArray(c->tailVao);
+		glDrawArraysInstanced(GL_TRIANGLES, 0, 6, c->particleCount);
+		glBindVertexArray(0);
+
+		glDepthMask(GL_TRUE);
+		glEnable(GL_CULL_FACE);
+		glDisable(GL_BLEND);
+	}
+	}
+}
+
 void initPlanet() {
 	createShader(&planetShader, "src/shaders/planet.vert",
 		"src/shaders/planet.frag");
@@ -1014,6 +1261,8 @@ void init()
 	initObject();
 	fprintf(stderr, "[trace] init: belts\n");
 	initBelts();
+	fprintf(stderr, "[trace] init: comets\n");
+	initComets();
 	fprintf(stderr, "[trace] init: atmosphere\n");
 	initAtmosphere();
 	initOrbits();
@@ -1875,6 +2124,7 @@ int main(int argc, char *argv[])
 		//glFrontFace(GL_CCW);
 		drawObj();
 		drawBelts();
+		drawComets();
 		drawMoon();
 		// Corona halo last: additive, no depth write, so it blends over
 		// anything behind it while still being occluded by anything in front.
@@ -1897,6 +2147,8 @@ int main(int argc, char *argv[])
 				moonOrbitSpeedArray[i] += 0.0001f/moonInstanceArray[i].orbit;
 			}
 			beltTime += 1.0f;
+			for(int ci = 0; ci < COMET_COUNT; ci++)
+				updateComet(&comets[ci]);
 			theta += 0.009f;
 		}
 
@@ -1924,6 +2176,19 @@ int main(int argc, char *argv[])
 	glDeleteVertexArrays(1, &kuiperBelt.vao);
 	glDeleteBuffers(1, &kuiperBelt.vbo);
 	glDeleteBuffers(1, &kuiperBelt.ibo);
+
+	for(int ci = 0; ci < COMET_COUNT; ci++)
+	{
+		glDeleteVertexArrays(1, &comets[ci].vao);
+		glDeleteBuffers(1, &comets[ci].vbo);
+		glDeleteVertexArrays(1, &comets[ci].tailVao);
+		glDeleteBuffers(1, &comets[ci].quadVbo);
+		glDeleteBuffers(1, &comets[ci].tailVbo);
+		free(comets[ci].mesh.points);
+		free(comets[ci].mesh.normals);
+	}
+	glDeleteProgram(cometShader);
+	glDeleteProgram(tailShader);
 
 	uiShutdown();
 	/* Chevron icons are shared, caller-owned textures (owned == 0 in the

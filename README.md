@@ -15,6 +15,8 @@ A 3D solar system rendered in C with OpenGL 4.1 (core profile). Originally devel
 - A moon-like body orbiting Earth — note: in this commit it is rendered with Earth's own texture (`drawMoon()` binds `planetInstanceArray[2]`, `src/Main.c:687`); the dedicated `moonTexture`/`moonBuilder()` code is present but never called. Real moon systems only exist on `master`.
 - 6-face skybox cubemap (`include/textures/skybox3/`).
 - Torus mesh (`include/obj/torus.obj`) rendered near the sun.
+- GPU-instanced asteroid belt (1,500 rocks) and Kuiper belt (1,000 rocks) — `asteroid.obj` / `rock.obj` (`initBelts`/`drawBelts`).
+- Three parabolic-flyby comets, each with its own perihelion distance (kept close to the sun), approach angle, phase, and speed so they dive in from different directions at different times. Each comet's tail is a fan of 132 billboard sprites pointing anti-sunward, and the whole body's visibility is tied to distance from the sun (bright close in, faded to invisible far out) so the eye catches the fast bright perihelion dive, not a slow distant orbit (see `initComets`/`updateComet`/`drawComets`).
 - All bodies share one subdivided-tetrahedron mesh (LOD 5 = 4096 triangles) with per-planet matrices.
 
 ## Controls
@@ -64,12 +66,14 @@ src/                 Application source (C)
   LoadShader.c/.h    Shader file loading + compilation
   Common.c/.h        Texture loading (SOIL), shader program linking
   GUI.c/.h           Textured-quad button widget system
-  shaders/           GLSL 410: skybox, sun, planet (normal + parallax), atmosphere, UI
+   shaders/           GLSL 410: skybox, sun, planet (normal + parallax), atmosphere, belt,
+                      comet (nucleus + particle tail), UI
   test/              Experimental atmosphere shader variants (not built)
   Makefile           Legacy macOS build
 include/
   textures/          Planet diffuse/normal maps, skybox3, button images
-  obj/               torus.obj (rendered), cube.obj, rock.obj, asteroid.obj (unused)
+   obj/               torus.obj, asteroid.obj + rock.obj (GPU-instanced asteroid/Kuiper
+                      belts; rock.obj also the comet nucleus), cube.obj (unused)
   SOIL/              SOIL 1.2 source + headers (compiled directly on Windows)
   freetype-2.4.0/    Leftover, unused
 lib/                 Legacy macOS static libs/dylibs (not used on Windows)
