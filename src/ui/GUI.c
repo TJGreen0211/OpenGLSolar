@@ -352,7 +352,7 @@ int uiAddButton(int id, const char *icon, const char *activeIcon)
 	b->id = id;
 	/* Missing art falls back to the plain pause icon so the menu still works
 	   without the generated buttons/*.png. */
-	const char *texPath = uiFileExists(icon) ? icon : "include/textures/buttonUp.png";
+	const char *texPath = uiFileExists(icon) ? icon : "assets/textures/buttonUp.png";
 	b->texture = loadTexture(texPath);
 	b->textureActive = (activeIcon && uiFileExists(activeIcon))
 		? loadTexture(activeIcon) : 0;

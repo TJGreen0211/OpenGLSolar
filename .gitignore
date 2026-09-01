@@ -2,18 +2,12 @@
 build/
 *.exe
 *.obj
-!include/obj/*.obj
+!assets/obj/*.obj
 *.o
 /glfw3.dll
 
-# Legacy committed binary from the original macOS build
-/src/cube
-
-# Legacy macOS libraries + duplicate headers (unused by any current build)
-/lib/
-
-# Unused vendored FreeType 2.4.0 source distribution
-/include/freetype-2.4.0/
+# --- Quarantine of dead/legacy files (see legacy/README.md) ---
+legacy/
 
 # Vendor docs not needed for the build
 third_party/glfw/glfw-3.4.bin.WIN64/docs/

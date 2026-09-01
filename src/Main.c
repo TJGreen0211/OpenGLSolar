@@ -202,19 +202,19 @@ struct uiTargetDef {
 
 #define UI_TARGET_COUNT 13
 static const struct uiTargetDef uiTargets[UI_TARGET_COUNT] = {
-	{ "include/textures/buttons/sun.png",     NULL, UI_ACT_SUN },
-	{ "include/textures/buttons/mercury.png", NULL, 0 },
-	{ "include/textures/buttons/venus.png",   NULL, 1 },
-	{ "include/textures/buttons/earth.png",   NULL, 2 },
-	{ "include/textures/buttons/mars.png",    NULL, 3 },
-	{ "include/textures/buttons/ceres.png",   NULL, 4 },
-	{ "include/textures/buttons/jupiter.png", NULL, 5 },
-	{ "include/textures/buttons/saturn.png",  NULL, 6 },
-	{ "include/textures/buttons/uranus.png",  NULL, 7 },
-	{ "include/textures/buttons/neptune.png", NULL, 8 },
-	{ "include/textures/buttons/pluto.png",   NULL, 9 },
-	{ "include/textures/buttons/eris.png",    NULL, 10 },
-	{ "include/textures/buttonUp.png",        "include/textures/buttonDown.png", UI_ACT_PAUSE },
+	{ "assets/textures/buttons/sun.png",     NULL, UI_ACT_SUN },
+	{ "assets/textures/buttons/mercury.png", NULL, 0 },
+	{ "assets/textures/buttons/venus.png",   NULL, 1 },
+	{ "assets/textures/buttons/earth.png",   NULL, 2 },
+	{ "assets/textures/buttons/mars.png",    NULL, 3 },
+	{ "assets/textures/buttons/ceres.png",   NULL, 4 },
+	{ "assets/textures/buttons/jupiter.png", NULL, 5 },
+	{ "assets/textures/buttons/saturn.png",  NULL, 6 },
+	{ "assets/textures/buttons/uranus.png",  NULL, 7 },
+	{ "assets/textures/buttons/neptune.png", NULL, 8 },
+	{ "assets/textures/buttons/pluto.png",   NULL, 9 },
+	{ "assets/textures/buttons/eris.png",    NULL, 10 },
+	{ "assets/textures/buttonUp.png",        "assets/textures/buttonDown.png", UI_ACT_PAUSE },
 };
 
 #define MAX_MOONS 21
@@ -410,17 +410,17 @@ float getScreenHeight()
 
 int *loadPlanetTextures(int planetTexArray[])
 {
-	char *textureStrings[] = {"include/textures/Planets/mercury.jpg",
-		"include/textures/Planets/venus.png",
-		"include/textures/Planets/earth.jpg",
-		"include/textures/Planets/mars.jpg",
-		"include/textures/Planets/ceres.jpg",
-		"include/textures/Planets/jupiter.jpg",
-		"include/textures/Planets/saturn.png",
-		"include/textures/Planets/uranus.jpg",
-		"include/textures/Planets/neptune.jpg",
-		"include/textures/Planets/pluto.png",
-		"include/textures/Planets/eris.jpg"};
+	char *textureStrings[] = {"assets/textures/planets/mercury.jpg",
+		"assets/textures/planets/venus.png",
+		"assets/textures/planets/earth.jpg",
+		"assets/textures/planets/mars.jpg",
+		"assets/textures/planets/ceres.jpg",
+		"assets/textures/planets/jupiter.jpg",
+		"assets/textures/planets/saturn.png",
+		"assets/textures/planets/uranus.jpg",
+		"assets/textures/planets/neptune.jpg",
+		"assets/textures/planets/pluto.png",
+		"assets/textures/planets/eris.jpg"};
 	int arraySize = sizeof(textureStrings)/sizeof(textureStrings[0]);
 	for(int i = 0; i < arraySize; i++)
 	{
@@ -432,17 +432,17 @@ int *loadPlanetTextures(int planetTexArray[])
 
 int *loadPlanetNormals(int planetTexArray[])
 {
-	char *textureStrings[] = {"include/textures/Planets/mercuryNormal.png",
-		"include/textures/Planets/venusNormal.png",
-		"include/textures/Planets/earthNormal.jpg",
-		"include/textures/Planets/marsNormal.png",
-		"include/textures/Planets/ceresNormal.png",
-		"include/textures/Planets/jupiterNormal.png",
-		"include/textures/Planets/saturnNormal.png",
-		"include/textures/Planets/uranusNormal.png",
-		"include/textures/Planets/neptuneNormal.png",
-		"include/textures/Planets/plutoNormal.png",
-		"include/textures/Planets/erisNormal.png"};
+	char *textureStrings[] = {"assets/textures/planets/mercuryNormal.png",
+		"assets/textures/planets/venusNormal.png",
+		"assets/textures/planets/earthNormal.jpg",
+		"assets/textures/planets/marsNormal.png",
+		"assets/textures/planets/ceresNormal.png",
+		"assets/textures/planets/jupiterNormal.png",
+		"assets/textures/planets/saturnNormal.png",
+		"assets/textures/planets/uranusNormal.png",
+		"assets/textures/planets/neptuneNormal.png",
+		"assets/textures/planets/plutoNormal.png",
+		"assets/textures/planets/erisNormal.png"};
 	int arraySize = sizeof(textureStrings)/sizeof(textureStrings[0]);
 	for(int i = 0; i < arraySize; i++)
 	{
@@ -454,17 +454,17 @@ int *loadPlanetNormals(int planetTexArray[])
 
 int *loadPlanetDisplacementMap(int planetTexArray[])
 {
-	char *textureStrings[] = {"include/textures/Planets/earthDisplacement.png",
-		"include/textures/Planets/earthDisplacement.png",
-		"include/textures/Planets/earthDisplacement.png",
-		"include/textures/Planets/jupiterDisplacement.png",
-		"include/textures/Planets/jupiterDisplacement.png",
-		"include/textures/Planets/jupiterDisplacement.png",
-		"include/textures/Planets/jupiterDisplacement.png",
-		"include/textures/Planets/jupiterDisplacement.png",
-		"include/textures/Planets/jupiterDisplacement.png",
-		"include/textures/Planets/jupiterDisplacement.png",
-		"include/textures/Planets/jupiterDisplacement.png"};
+	char *textureStrings[] = {"assets/textures/planets/earthDisplacement.png",
+		"assets/textures/planets/earthDisplacement.png",
+		"assets/textures/planets/earthDisplacement.png",
+		"assets/textures/planets/jupiterDisplacement.png",
+		"assets/textures/planets/jupiterDisplacement.png",
+		"assets/textures/planets/jupiterDisplacement.png",
+		"assets/textures/planets/jupiterDisplacement.png",
+		"assets/textures/planets/jupiterDisplacement.png",
+		"assets/textures/planets/jupiterDisplacement.png",
+		"assets/textures/planets/jupiterDisplacement.png",
+		"assets/textures/planets/jupiterDisplacement.png"};
 	int arraySize = sizeof(textureStrings)/sizeof(textureStrings[0]);
 	for(int i = 0; i < arraySize; i++)
 	{
@@ -614,27 +614,27 @@ void moonBuilder()
 	// Only moons whose texture file exists are drawn, so dropping a file
 	// into one of these paths re-adds that moon.
 	static const struct moonDef defs[MAX_MOONS] = {
-		{ "moon",      "include/textures/Planets/moon.jpg",          2,  1.0f,       0.272704f,  0.083f     },
-		{ "phobos",    "include/textures/moons/phobos.jpg",     3,  0.015609f,  0.001413f,  0.063014f  },
-		{ "deimos",    "include/textures/moons/deimos.jpg",     3,  0.037919f,  0.000306f,  0.003425f  },
-		{ "callisto",  "include/textures/moons/callisto.jpg",   5,  4.883117f,  0.376707f,  0.046575f  },
-		{ "europa",    "include/textures/moons/europa.jpg",     5,  1.742597f,  0.24329f,   0.009703f  },
-		{ "ganymede",  "include/textures/moons/ganymede.jpg",   5,  2.779221f,  0.206498f,  0.292123f  },
-		{ "io",        "include/textures/moons/io.jpg",         5,  0.680519f,  0.142936f,  0.004849f  },
-		{ "dione",     "include/textures/moons/dione.jpg",      6,  0.98026f,   0.088134f,  0.006849f  },
-		{ "enceladus", "include/textures/moons/enceladus.jpg",  6,  0.384179f,  0.024643f,  0.003753f  },
-		{ "iapetus",   "include/textures/moons/iapetus.jpg",    6,  35.224156f, 0.115461f,  0.216438f  },
-		{ "mimas",     "include/textures/moons/mimas.jpg",      6,  0.481919f,  0.010909f,  0.002581f  },
-		{ "rhea",      "include/textures/moons/rhea.jpg",       6,  1.368935f,  0.119918f,  0.012329f  },
-		{ "tethys",    "include/textures/moons/tethys.jpg",     6,  0.766234f,  0.04183f,   0.005171f  },
-		{ "titan",     "include/textures/moons/titan.png",      6,  3.173688f,  0.404175f,  0.043607f  },
-		{ "ariel",     "include/textures/moons/ariel.jpg",      7,  0.495844f,  0.0908f,    0.006545f  },
-		{ "miranda",   "include/textures/moons/miranda.jpg",    7,  0.336078f,  0.036886f,  0.003836f  },
-		{ "oberon",    "include/textures/moons/oberon.jpg",     7,  1.513247f,  0.1194f,    0.036886f  },
-		{ "titania",   "include/textures/moons/titania.jpg",    7,  1.132234f,  0.1235f,    0.023836f  },
-		{ "umbriel",   "include/textures/moons/umbriel.jpg",    7,  0.429151f,  0.091822f,  0.011342f  },
-		{ "triton",    "include/textures/moons/triton.jpg",     8,  0.921452f,  0.2122f,   -0.016101f  },
-		{ "charon",    "include/textures/moons/charon.jpg",     9,  0.045548f,  0.095f,     0.017479f  },
+		{ "moon",      "assets/textures/planets/moon.jpg",          2,  1.0f,       0.272704f,  0.083f     },
+		{ "phobos",    "assets/textures/moons/phobos.jpg",     3,  0.015609f,  0.001413f,  0.063014f  },
+		{ "deimos",    "assets/textures/moons/deimos.jpg",     3,  0.037919f,  0.000306f,  0.003425f  },
+		{ "callisto",  "assets/textures/moons/callisto.jpg",   5,  4.883117f,  0.376707f,  0.046575f  },
+		{ "europa",    "assets/textures/moons/europa.jpg",     5,  1.742597f,  0.24329f,   0.009703f  },
+		{ "ganymede",  "assets/textures/moons/ganymede.jpg",   5,  2.779221f,  0.206498f,  0.292123f  },
+		{ "io",        "assets/textures/moons/io.jpg",         5,  0.680519f,  0.142936f,  0.004849f  },
+		{ "dione",     "assets/textures/moons/dione.jpg",      6,  0.98026f,   0.088134f,  0.006849f  },
+		{ "enceladus", "assets/textures/moons/enceladus.jpg",  6,  0.384179f,  0.024643f,  0.003753f  },
+		{ "iapetus",   "assets/textures/moons/iapetus.jpg",    6,  35.224156f, 0.115461f,  0.216438f  },
+		{ "mimas",     "assets/textures/moons/mimas.jpg",      6,  0.481919f,  0.010909f,  0.002581f  },
+		{ "rhea",      "assets/textures/moons/rhea.jpg",       6,  1.368935f,  0.119918f,  0.012329f  },
+		{ "tethys",    "assets/textures/moons/tethys.jpg",     6,  0.766234f,  0.04183f,   0.005171f  },
+		{ "titan",     "assets/textures/moons/titan.png",      6,  3.173688f,  0.404175f,  0.043607f  },
+		{ "ariel",     "assets/textures/moons/ariel.jpg",      7,  0.495844f,  0.0908f,    0.006545f  },
+		{ "miranda",   "assets/textures/moons/miranda.jpg",    7,  0.336078f,  0.036886f,  0.003836f  },
+		{ "oberon",    "assets/textures/moons/oberon.jpg",     7,  1.513247f,  0.1194f,    0.036886f  },
+		{ "titania",   "assets/textures/moons/titania.jpg",    7,  1.132234f,  0.1235f,    0.023836f  },
+		{ "umbriel",   "assets/textures/moons/umbriel.jpg",    7,  0.429151f,  0.091822f,  0.011342f  },
+		{ "triton",    "assets/textures/moons/triton.jpg",     8,  0.921452f,  0.2122f,   -0.016101f  },
+		{ "charon",    "assets/textures/moons/charon.jpg",     9,  0.045548f,  0.095f,     0.017479f  },
 	};
 
 	for(int i = 0; i < 11; i++)
@@ -642,7 +642,7 @@ void moonBuilder()
 
 	moonNormalTexture = createNeutralNormalTexture();
 	finishLoadingStep();
-	moonDisplacementTexture = loadTexture("include/textures/Planets/moonDisplacement.png");
+	moonDisplacementTexture = loadTexture("assets/textures/planets/moonDisplacement.png");
 	finishLoadingStep();
 
 	// defs are ordered by planet, so appending keeps each planet's moons
@@ -672,7 +672,7 @@ void moonBuilder()
 // ---------------------------------------------------------------------------
 // Ring textures
 //
-// The old commit loaded include/textures/Planets/saturnRing.png, which was
+// The old commit loaded assets/textures/planets/saturnRing.png, which was
 // never committed. Synthesize an equivalent radial band profile instead: a
 // 512x2 RGBA strip whose RGB is the ring colour and whose A is the
 // per-radius brightness. u = 0 is the inner ring edge, u = 1 the outer one.
@@ -808,7 +808,7 @@ vec3 *generateSmoothNormals(int vertexNumber, vec3 *vna, vec3 *pointArray, vec3 
 */
 
 void initObject() {
-	object = ObjLoadModel("include/obj/torus.obj");
+	object = ObjLoadModel("assets/obj/torus.obj");
 
 	glGenVertexArrays(1, &objectVAO);
 	glBindVertexArray(objectVAO);
@@ -912,13 +912,13 @@ void initBelts()
 
 	// Main asteroid belt: between drawn Mars (1.88 * 2000 = 3760) and
 	// Jupiter (11.86 * 2000 = 23724).
-	initBelt(&asteroidBelt, "include/obj/asteroid.obj", 1500,
+	initBelt(&asteroidBelt, "assets/obj/asteroid.obj", 1500,
 		4200.0f, 6800.0f, 120.0f, 6.0f, 30.0f);
 	// Kuiper belt: past drawn Jupiter, kept inside the view frustum
 	// (zFar = 100000, camera distance max 25000) — the specced "past
 	// Neptune" range (Neptune draws at 329600) is beyond the far plane
 	// and can never be seen.
-	initBelt(&kuiperBelt, "include/obj/rock.obj", 1000,
+	initBelt(&kuiperBelt, "assets/obj/rock.obj", 1000,
 		35000.0f, 95000.0f, 1200.0f, 15.0f, 80.0f);
 }
 
@@ -956,7 +956,7 @@ void initComets()
 	for(int ci = 0; ci < COMET_COUNT; ci++)
 	{
 	comet *c = &comets[ci];
-	c->mesh = ObjLoadModel("include/obj/rock.obj");
+	c->mesh = ObjLoadModel("assets/obj/rock.obj");
 	c->particleCount = COMET_PARTICLES;
 
 	// Ellipse geometry, sun at the focus: e = (rA - q)/(rA + q), p = q(1+e).
@@ -1915,12 +1915,12 @@ GLFWwindow *setupGLFW() {
 int initCubemap()
 {
 	char *cubemapArray[] = {
-		"include/textures/skybox3/right.png",
-		"include/textures/skybox3/left.png",
-		"include/textures/skybox3/top.png",
-		"include/textures/skybox3/bottom.png",
-		"include/textures/skybox3/back.png",
-		"include/textures/skybox3/front.png"
+		"assets/textures/skybox3/right.png",
+		"assets/textures/skybox3/left.png",
+		"assets/textures/skybox3/top.png",
+		"assets/textures/skybox3/bottom.png",
+		"assets/textures/skybox3/back.png",
+		"assets/textures/skybox3/front.png"
 	};
 	return loadCubemap(cubemapArray);
 }
@@ -2237,9 +2237,9 @@ int main(int argc, char *argv[])
 	}*/
 
 	fprintf(stderr, "[trace] main: loading sun textures\n");
-	sunTexture = loadTexture("include/textures/Planets/sun2.jpg");
+	sunTexture = loadTexture("assets/textures/planets/sun2.jpg");
 	finishLoadingStep();
-	sunNormal = loadTexture("include/textures/Planets/sunNormal.png");
+	sunNormal = loadTexture("assets/textures/planets/sunNormal.png");
 	finishLoadingStep();
 	fprintf(stderr, "[trace] main: planetBuilder\n");
 	planetBuilder(); // steps inside its texture loops

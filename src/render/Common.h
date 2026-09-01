@@ -12,7 +12,7 @@
 #include <glad/gl.h>
 #endif
 #include <GLFW/glfw3.h>
-#include "../include/SOIL/src/SOIL.h"
+#include "SOIL.h"
 
 void createShader(GLuint *shader, char *vert, char *frag);
 GLuint loadCubemap(char **faces);

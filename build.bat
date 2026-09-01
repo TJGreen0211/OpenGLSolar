@@ -24,10 +24,10 @@ if not exist "%GLAD_ROOT%\include\glad\gl.h" (
 if not exist build\obj mkdir build\obj
 
 cl /nologo /W3 /O2 /MD /DWIN32 /DNOMINMAX /D_CRT_SECURE_NO_WARNINGS ^
-  /Isrc /Iinclude /I"include\SOIL\src" /I"%GLFW_ROOT%\include" /I"%GLAD_ROOT%\include" /I"lib\include" ^
-  /Fobuild\obj\ /Fecube.exe ^
-  src\Main.c src\Common.c src\LoadShader.c src\GUI.c src\LinearAlg.c src\Camera.c src\Sphere.c src\Geometry.c src\Obj.c ^
-  "%GLAD_ROOT%\src\gl.c" "include\SOIL\src\SOIL.c" "include\SOIL\src\stb_image_aug.c" "include\SOIL\src\image_helper.c" "include\SOIL\src\image_DXT.c" ^
+  /Isrc /Isrc\render /Isrc\ui /Isrc\geometry /I"third_party\soil\src" /I"%GLFW_ROOT%\include" /I"%GLAD_ROOT%\include" ^
+  /Fobuild\obj\ /Fesolarsystem.exe ^
+  src\Main.c src\render\Common.c src\render\LoadShader.c src\ui\GUI.c src\geometry\LinearAlg.c src\ui\Camera.c src\geometry\Sphere.c src\geometry\Geometry.c src\geometry\Obj.c ^
+  "%GLAD_ROOT%\src\gl.c" "third_party\soil\src\SOIL.c" "third_party\soil\src\stb_image_aug.c" "third_party\soil\src\image_helper.c" "third_party\soil\src\image_DXT.c" ^
   /link /LIBPATH:"%GLFW_ROOT%\lib-vc2022" glfw3dll.lib opengl32.lib gdi32.lib user32.lib shell32.lib winmm.lib
 if errorlevel 1 (
     echo [build] FAILED
@@ -35,5 +35,5 @@ if errorlevel 1 (
 )
 
 copy /y "%GLFW_ROOT%\lib-vc2022\glfw3.dll" . >nul
-echo [build] OK: cube.exe
-echo [build] Run: run.bat  (or double-click cube.exe - it self-locates assets)
+echo [build] OK: solarsystem.exe
+echo [build] Run: run.bat  (or double-click solarsystem.exe - it self-locates assets)
