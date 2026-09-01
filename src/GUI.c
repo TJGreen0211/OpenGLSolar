@@ -1,8 +1,11 @@
+#define _USE_MATH_DEFINES
 #include "GUI.h"
 #include <stdio.h>
+#include <string.h>
 
 static GLuint UIShader;
 static GLint uiLRect, uiLColor, uiLHasTex, uiLTint, uiLAlpha, uiLViewport, uiLTex;
+static GLint uiLUVOff, uiLUVScale, uiLTintTex;
 static GLuint UIvao, UIvbo;
 static uiButton buttons[UI_MAX_BUTTONS];
 static int uiCount = 0;
@@ -11,6 +14,14 @@ static int sliderCount = 0;
 static int activeSlider = -1;
 static uiSliderChangedFn sliderChanged = NULL;
 static int uiReady = 0;
+
+static uiTextButton textButtons[UI_MAX_TEXTBUTTONS];
+static int textButtonCount = 0;
+
+// Forward: uiDrawTextButton (defined above the widget pass) reuses the flat
+// quad helper that lives further down.
+static void uiDrawFlat(float x, float y, float w, float h,
+	float r, float g, float b, float a, float tint);
 
 void attachGUIShaders()
 {
@@ -23,6 +34,9 @@ void attachGUIShaders()
 	uiLAlpha = glGetUniformLocation(UIShader, "uAlpha");
 	uiLViewport = glGetUniformLocation(UIShader, "uViewport");
 	uiLTex = glGetUniformLocation(UIShader, "uTex");
+	uiLUVOff = glGetUniformLocation(UIShader, "uUVOff");
+	uiLUVScale = glGetUniformLocation(UIShader, "uUVScale");
+	uiLTintTex = glGetUniformLocation(UIShader, "uTintTex");
 }
 
 static int uiFileExists(const char *path)
@@ -31,6 +45,261 @@ static int uiFileExists(const char *path)
 	if (f)
 		fclose(f);
 	return f != NULL;
+}
+
+/* ------------------------------------------------------------------ */
+/* Bitmap font                                                         */
+/*                                                                     */
+/* A self-contained 5x7 glyph atlas (no external font dependency). Each */
+/* glyph is stored as 7 rows of 5 ASCII '0'/'1' bits and rasterised into */
+/* a white-on-transparent RGBA texture at init; text draws tint it via  */
+/* the uTintTex path in UI.frag. One cell per glyph, 1px padding.       */
+/* ------------------------------------------------------------------ */
+#define FONT_W   5
+#define FONT_H   7
+#define FONT_PAD 1
+#define FONT_CELL_W (FONT_W + FONT_PAD * 2)
+#define FONT_CELL_H (FONT_H + FONT_PAD * 2)
+#define FONT_COLS 8
+#define FONT_ROWS 6
+#define FONT_ATLAS_W (FONT_COLS * FONT_CELL_W)
+#define FONT_ATLAS_H (FONT_ROWS * FONT_CELL_H)
+
+/* Order must match FONT_ASCII below. */
+static const char *FONT_CHARS = " 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ:./+-()%,";
+#define NUM_FONT_GLYPHS 46
+
+static const char *FONT_ASCII[NUM_FONT_GLYPHS][FONT_H] = {
+	/* 0  space */ { "     ", "     ", "     ", "     ", "     ", "     ", "     " },
+	/* 1  '0'  */ { "01110", "10001", "10011", "10101", "11001", "10001", "01110" },
+	/* 2  '1'  */ { "00100", "01100", "00100", "00100", "00100", "00100", "01110" },
+	/* 3  '2'  */ { "01110", "10001", "00001", "00110", "01000", "10000", "11111" },
+	/* 4  '3'  */ { "11111", "00010", "00100", "00010", "00001", "10001", "01110" },
+	/* 5  '4'  */ { "00010", "00110", "01010", "10010", "11111", "00010", "00010" },
+	/* 6  '5'  */ { "11111", "10000", "11110", "00001", "00001", "10001", "01110" },
+	/* 7  '6'  */ { "00110", "01000", "10000", "11110", "10001", "10001", "01110" },
+	/* 8  '7'  */ { "11111", "00001", "00010", "00100", "01000", "01000", "01000" },
+	/* 9  '8'  */ { "01110", "10001", "10001", "01110", "10001", "10001", "01110" },
+	/* 10 '9'  */ { "01110", "10001", "10001", "01111", "00001", "00010", "01100" },
+	/* 11 'A'  */ { "01110", "10001", "10001", "11111", "10001", "10001", "10001" },
+	/* 12 'B'  */ { "11110", "10001", "10001", "11110", "10001", "10001", "11110" },
+	/* 13 'C'  */ { "01110", "10001", "10000", "10000", "10000", "10001", "01110" },
+	/* 14 'D'  */ { "11100", "10010", "10001", "10001", "10001", "10010", "11100" },
+	/* 15 'E'  */ { "11111", "10000", "10000", "11110", "10000", "10000", "11111" },
+	/* 16 'F'  */ { "11111", "10000", "10000", "11110", "10000", "10000", "10000" },
+	/* 17 'G'  */ { "01110", "10001", "10000", "10111", "10001", "10001", "01111" },
+	/* 18 'H'  */ { "10001", "10001", "10001", "11111", "10001", "10001", "10001" },
+	/* 19 'I'  */ { "01110", "00100", "00100", "00100", "00100", "00100", "01110" },
+	/* 20 'J'  */ { "00111", "00010", "00010", "00010", "00010", "10010", "01100" },
+	/* 21 'K'  */ { "10001", "10010", "10100", "11000", "10100", "10010", "10001" },
+	/* 22 'L'  */ { "10000", "10000", "10000", "10000", "10000", "10000", "11111" },
+	/* 23 'M'  */ { "10001", "11011", "10101", "10101", "10001", "10001", "10001" },
+	/* 24 'N'  */ { "10001", "11001", "10101", "10011", "10001", "10001", "10001" },
+	/* 25 'O'  */ { "01110", "10001", "10001", "10001", "10001", "10001", "01110" },
+	/* 26 'P'  */ { "11110", "10001", "10001", "11110", "10000", "10000", "10000" },
+	/* 27 'Q'  */ { "01110", "10001", "10001", "10001", "10101", "10010", "01101" },
+	/* 28 'R'  */ { "11110", "10001", "10001", "11110", "10100", "10010", "10001" },
+	/* 29 'S'  */ { "01111", "10000", "10000", "01110", "00001", "00001", "11110" },
+	/* 30 'T'  */ { "11111", "00100", "00100", "00100", "00100", "00100", "00100" },
+	/* 31 'U'  */ { "10001", "10001", "10001", "10001", "10001", "10001", "01110" },
+	/* 32 'V'  */ { "10001", "10001", "10001", "10001", "10001", "01010", "00100" },
+	/* 33 'W'  */ { "10001", "10001", "10001", "10101", "10101", "10101", "01010" },
+	/* 34 'X'  */ { "10001", "10001", "01010", "00100", "01010", "10001", "10001" },
+	/* 35 'Y'  */ { "10001", "10001", "01010", "00100", "00100", "00100", "00100" },
+	/* 36 'Z'  */ { "11111", "00001", "00010", "00100", "01000", "10000", "11111" },
+	/* 37 ':'  */ { "00000", "00100", "00000", "00000", "00000", "00100", "00000" },
+	/* 38 '.'  */ { "00000", "00000", "00000", "00000", "00000", "00110", "00110" },
+	/* 39 '/'  */ { "00001", "00001", "00010", "00100", "01000", "10000", "10000" },
+	/* 40 '+'  */ { "00000", "00100", "00100", "11111", "00100", "00100", "00000" },
+	/* 41 '-'  */ { "00000", "00000", "00000", "01110", "00000", "00000", "00000" },
+	/* 42 '%'  */ { "11001", "11010", "00010", "00100", "01011", "10011", "00000" },
+	/* 43 '('  */ { "00010", "00100", "01000", "01000", "01000", "00100", "00010" },
+	/* 44 ')'  */ { "01000", "00100", "00010", "00010", "00010", "00100", "01000" },
+	/* 45 ','  */ { "00000", "00000", "00000", "00000", "00100", "00100", "01000" },
+};
+
+static GLuint fontAtlas = 0;
+
+static int fontIndex(char c)
+{
+	const char *p = strchr(FONT_CHARS, c);
+	if (!p)
+		return -1;
+	return (int)(p - FONT_CHARS);
+}
+
+/* Rasterise every glyph into a white-on-transparent RGBA atlas. The upload
+   is unflipped (first byte == lower-left), so row 0 of the font (the glyph
+   top) lands at the top of its cell, matching the v mapping in uiDrawText. */
+static void buildFontAtlas(void)
+{
+	static unsigned char buf[FONT_ATLAS_W * FONT_ATLAS_H * 4];
+	memset(buf, 0, sizeof(buf));
+
+	for (int g = 0; g < NUM_FONT_GLYPHS; g++)
+	{
+		int colg = g % FONT_COLS;
+		int rowg = g / FONT_COLS;                 /* 0 = top row */
+		int px0 = colg * FONT_CELL_W + FONT_PAD;
+		int pyBase = (FONT_ROWS - 1 - rowg) * FONT_CELL_H;
+		for (int tr = 0; tr < FONT_H; tr++)
+			for (int cx = 0; cx < FONT_W; cx++)
+			{
+				if (FONT_ASCII[g][tr][cx] != '1')
+					continue;
+				int px = px0 + cx;
+				int py = pyBase + (FONT_CELL_H - 1 - FONT_PAD) - tr;
+				unsigned char *p = &buf[(py * FONT_ATLAS_W + px) * 4];
+				p[0] = p[1] = p[2] = 255;
+				p[3] = 255;
+			}
+	}
+
+	glGenTextures(1, &fontAtlas);
+	glBindTexture(GL_TEXTURE_2D, fontAtlas);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, FONT_ATLAS_W, FONT_ATLAS_H, 0,
+		GL_RGBA, GL_UNSIGNED_BYTE, buf);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+/* Draw a line of bitmap-font text. Self-contained (binds the UI shader, the
+   unit quad VAO and the atlas), so it can be called independently of the
+   uiDrawAll button pass. x,y is the top-left of the text in window px (y
+   down); px is the per-glyph-pixel scale. */
+void uiDrawText(const char *text, float x, float y, float px,
+                float r, float g, float b, float a)
+{
+	if (!uiReady || !text || fontAtlas == 0)
+		return;
+
+	int viewport[4];
+	glGetIntegerv(GL_VIEWPORT, viewport);
+
+	glUseProgram(UIShader);
+	glUniform2f(uiLViewport, (float)viewport[2], (float)viewport[3]);
+	glUniform1i(uiLTex, 0);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, fontAtlas);
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glDisable(GL_DEPTH_TEST);
+	glDepthMask(GL_FALSE);
+	glDisable(GL_CULL_FACE);
+
+	glBindVertexArray(UIvao);
+	glUniform1f(uiLHasTex, 1.0f);
+	glUniform1f(uiLTint, 0.0f);
+	glUniform1f(uiLTintTex, 1.0f);
+	glUniform1f(uiLAlpha, a);
+	glUniform4f(uiLColor, r, g, b, 1.0f);
+	glUniform2f(uiLUVScale, (float)FONT_W / (float)FONT_ATLAS_W,
+	                        (float)FONT_H / (float)FONT_ATLAS_H);
+	glUniform2f(uiLUVOff, 0.0f, 0.0f);
+
+	float penX = x;
+	for (const char *cp = text; *cp; cp++)
+	{
+		int gi = fontIndex(*cp);
+		float advance = px * (float)(FONT_W + FONT_PAD);
+		if (gi < 0)
+		{
+			penX += advance;
+			continue;
+		}
+		int colg = gi % FONT_COLS;
+		int rowg = gi / FONT_COLS;
+		int pyBase = (FONT_ROWS - 1 - rowg) * FONT_CELL_H;
+		glUniform2f(uiLUVOff,
+			(colg * FONT_CELL_W + FONT_PAD) / (float)FONT_ATLAS_W,
+			(pyBase + FONT_PAD) / (float)FONT_ATLAS_H);
+		glUniform4f(uiLRect, penX, y, px * (float)FONT_W, px * (float)FONT_H);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+		penX += advance;
+	}
+
+	glBindVertexArray(0);
+	glEnable(GL_DEPTH_TEST);
+	glDepthMask(GL_TRUE);
+	glEnable(GL_CULL_FACE);
+	glDisable(GL_BLEND);
+}
+
+int uiAddTextButton(int id, const char *label)
+{
+	if (!uiReady || textButtonCount >= UI_MAX_TEXTBUTTONS)
+		return -1;
+	uiTextButton *tb = &textButtons[textButtonCount];
+	tb->id = id;
+	if (label)
+	{
+		strncpy(tb->label, label, sizeof(tb->label) - 1);
+		tb->label[sizeof(tb->label) - 1] = 0;
+	}
+	else
+		tb->label[0] = 0;
+	tb->rect[0] = tb->rect[1] = tb->rect[2] = tb->rect[3] = 0.0f;
+	tb->selected = 0;
+	tb->hovered = 0;
+	return textButtonCount++;
+}
+
+int uiTextButtonCount(void)
+{
+	return textButtonCount;
+}
+
+void uiSetTextButtonSelected(int id, int selected)
+{
+	for (int i = 0; i < textButtonCount; i++)
+		if (textButtons[i].id == id)
+			textButtons[i].selected = selected ? 1 : 0;
+}
+
+/* Horizontal row of text buttons anchored top-left, sitting just below the
+   date/speed info lines (which Main.c draws at y = 24..84). */
+void uiLayoutTextButtons(int winW, int winH)
+{
+	(void)winW; (void)winH;
+	if (!uiReady || textButtonCount <= 0)
+		return;
+	const float px = 1.6f;
+	const float padX = 10.0f, padY = 6.0f, x0 = 24.0f, y0 = 100.0f, gap = 8.0f;
+	float x = x0;
+	for (int i = 0; i < textButtonCount; i++)
+	{
+		uiTextButton *tb = &textButtons[i];
+		float tw = (float)strlen(tb->label) * px * (float)(FONT_W + FONT_PAD);
+		tb->rect[0] = x;
+		tb->rect[1] = y0;
+		tb->rect[2] = tw + 2.0f * padX;
+		tb->rect[3] = px * (float)FONT_H + 2.0f * padY;
+		x += tb->rect[2] + gap;
+	}
+}
+
+/* One text button: a flat slot (accent when selected, dark otherwise) with a
+   centred white label. Assumes the UI shader + quad VAO + blend are already
+   set up (called from uiDrawAll after the icon/slider passes). */
+static void uiDrawTextButton(uiTextButton *tb)
+{
+	const float px = 1.6f;
+	const float padX = 10.0f, padY = 6.0f;
+	float x = tb->rect[0], y = tb->rect[1], w = tb->rect[2], h = tb->rect[3];
+
+	if (tb->selected)
+		uiDrawFlat(x, y, w, h, 0.30f, 0.55f, 0.95f, 0.95f, tb->hovered ? 0.25f : 0.0f);
+	else
+		uiDrawFlat(x, y, w, h, 0.05f, 0.06f, 0.10f, 0.70f, tb->hovered ? 0.25f : 0.0f);
+
+	float tw = (float)strlen(tb->label) * px * (float)(FONT_W + FONT_PAD);
+	float lx = x + (w - tw) * 0.5f;
+	float ly = y + (h - px * (float)FONT_H) * 0.5f;
+	uiDrawText(tb->label, lx, ly, px, 1.0f, 1.0f, 1.0f, 0.95f);
 }
 
 /* One shared unit quad for every button, built once. Vertex format is the
@@ -69,6 +338,7 @@ int uiInit(void)
 	glEnableVertexAttribArray(texCoord);
 
 	glBindVertexArray(0);
+	buildFontAtlas();
 	uiReady = 1;
 	return 1;
 }
@@ -368,6 +638,8 @@ void uiSetMouse(float x, float y)
 		if (activeSlider == i)
 			sliderSetT(&sliders[i], x);
 	}
+	for (int i = 0; i < textButtonCount; i++)
+		textButtons[i].hovered = pointInRect(x, y, textButtons[i].rect) ? 1 : 0;
 }
 
 int uiHitTest(float x, float y)
@@ -377,10 +649,15 @@ int uiHitTest(float x, float y)
 	for (int i = 0; i < uiCount; i++)
 		if (buttons[i].visible && pointInRect(x, y, buttons[i].rect))
 			return buttons[i].id;
+	for (int i = 0; i < textButtonCount; i++)
+		if (pointInRect(x, y, textButtons[i].rect))
+			return textButtons[i].id;
 	return UI_ACT_NONE;
 }
 
-/* Flat (untextured) UI quad. */
+/* Flat (untextured) UI quad. Resets the text-only uniforms so a flat draw is
+   never affected by a preceding uiDrawText (which leaves uTintTex at 1 and
+   the glyph UVs set). */
 static void uiDrawFlat(float x, float y, float w, float h,
 	float r, float g, float b, float a, float tint)
 {
@@ -389,6 +666,9 @@ static void uiDrawFlat(float x, float y, float w, float h,
 	glUniform1f(uiLHasTex, 0.0f);
 	glUniform1f(uiLTint, tint);
 	glUniform1f(uiLAlpha, 1.0f);
+	glUniform1f(uiLTintTex, 0.0f);
+	glUniform2f(uiLUVOff, 0.0f, 0.0f);
+	glUniform2f(uiLUVScale, 1.0f, 1.0f);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
@@ -405,6 +685,11 @@ void uiDrawAll(int followedId, int pauseActive)
 	glUseProgram(UIShader);
 	glUniform2f(uiLViewport, (float)viewport[2], (float)viewport[3]);
 	glUniform1i(uiLTex, 0);
+	/* Icons and flat slots use the whole texture / no tint (overridden per
+	   glyph by uiDrawText). */
+	glUniform2f(uiLUVOff, 0.0f, 0.0f);
+	glUniform2f(uiLUVScale, 1.0f, 1.0f);
+	glUniform1f(uiLTintTex, 0.0f);
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -470,6 +755,14 @@ void uiDrawAll(int followedId, int pauseActive)
 			14.0f, 14.0f, s->accent[0], s->accent[1], s->accent[2], 1.0f, tint);
 	}
 
+	/* Labelled buttons last. uiDrawText is self-contained and unbinds the
+	   quad on return, so re-bind it before each button's slot quad. */
+	for (int i = 0; i < textButtonCount; i++)
+	{
+		glBindVertexArray(UIvao);
+		uiDrawTextButton(&textButtons[i]);
+	}
+
 	glBindVertexArray(0);
 	glEnable(GL_DEPTH_TEST);
 	glDepthMask(GL_TRUE);
@@ -496,8 +789,12 @@ void uiShutdown(void)
 	}
 	uiCount = 0;
 	sliderCount = 0;
+	textButtonCount = 0;
 	activeSlider = -1;
 	glDeleteVertexArrays(1, &UIvao);
 	glDeleteBuffers(1, &UIvbo);
+	if (fontAtlas)
+		glDeleteTextures(1, &fontAtlas);
+	fontAtlas = 0;
 	glDeleteProgram(UIShader);
 }

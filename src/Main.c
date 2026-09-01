@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <math.h>
+#include <time.h>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -65,7 +67,6 @@ int keys;
 int actionPress;
 
 float zNear = 0.5, zFar = 100000.0;
-float theta = 0.0;
 
 GLuint sunTexture;
 GLuint sunNormal;
@@ -151,7 +152,7 @@ GLuint cometShader, tailShader;
 void initMVP(int shader, mat4 m, mat4 v);
 
 void initComets();
-void updateComet(comet *c, float timeScale);
+void updateComet(comet *c, float dDays);
 void drawComets();
 GLuint shadowFBO, depthMap, rboDepth;
 GLuint ModelView, projection, model, view;
@@ -229,6 +230,165 @@ float orbitSpeedArray[11] = {0};
 float rotationSpeedArray[11] = {0};
 float moonOrbitSpeedArray[MAX_MOONS] = {0};
 int loadedMoonCount = 0;
+
+// --- Simulation clock -------------------------------------------------------
+// All motion is a pure function of simDays, the number of calendar days since
+// the J2000 epoch (2000-01-01 12:00 TT). On startup simDays is set to the
+// current UTC date/time, so the planets begin at their real heliocentric mean
+// longitudes. Each frame, if not paused, simDays advances by
+// simDaysPerSec * deltaTime and updateBodies() recomputes every angle
+// absolutely (no per-frame accumulation), so changing speed never drifts or
+// teleports a body. simDaysPerSec is chosen from the three on-screen presets.
+double simDays = 0.0;
+double simDaysPerSec = 1.0;
+#define SIM_SPEED_PRESET_COUNT 3
+static const double simSpeedPresetDaysPerSec[SIM_SPEED_PRESET_COUNT] = {
+	1.0,        // 1 day per second of real time (default)
+	7.0,        // 1 week per second
+	365.25      // 1 year per second
+};
+int simSpeedIndex = 0;
+// Ticks (of the old 60-Hz reference frame) per simulated day. The old motion
+// constants were tuned per 60-Hz frame at a fixed pace of 3.48898 sim-days/sec,
+// so one old day = 60/3.48898 frames. Used to rebase the belt spin and comet
+// speeds from per-frame to rad-per-day.
+#define OLD_TICKS_PER_DAY 17.2023f
+// Base moon angular rate: the old per-frame step was 0.0001/moon.orbit rad;
+// times OLD_TICKS_PER_DAY rad-per-day gives 0.00172023/moon.orbit.
+#define MOON_BASE_RAD_PER_DAY 0.00172023
+
+// Heliocentric ecliptic mean longitude (deg) at J2000 and mean motion
+// (deg/day) for each body, matching planetInstanceArray order (0 Mercury ..
+// 10 Eris). Rates are 360/period-in-days; L0 anchors each orbit to the real
+// sky at startup (see planetLon0Deg comment). Planet longitudes are mean
+// (elliptical correction omitted) which is within a few degrees of the true
+// value for this visual model.
+static const float planetLon0Deg[11] = {
+	252.25084f,  // Mercury
+	181.97973f,  // Venus
+	100.46435f,  // Earth
+	355.45332f,  // Mars
+	152.00000f,  // Ceres
+	34.40438f,   // Jupiter
+	49.94432f,   // Saturn
+	313.23810f,  // Uranus
+	304.88003f,  // Neptune
+	238.92903f,  // Pluto
+	8.22000f     // Eris
+};
+static const float planetLonRateDegPerDay[11] = {
+	4.092338f,   // Mercury (87.969 d)
+	1.602130f,   // Venus   (224.701 d)
+	0.985647f,   // Earth   (365.256 d)
+	0.524027f,   // Mars    (686.980 d)
+	0.214115f,   // Ceres   (1681.65 d)
+	0.083084f,   // Jupiter (4332.59 d)
+	0.033468f,   // Saturn  (10759.2 d)
+	0.011731f,   // Uranus  (30688.5 d)
+	0.005981f,   // Neptune (60182 d)
+	0.003975f,   // Pluto   (90560 d)
+	0.00176025f  // Eris    (204516 d)
+};
+// Labels for the on-screen speed buttons and the HUD readout, matching
+// simSpeedPresetDaysPerSec order.
+static const char *simSpeedLabels[SIM_SPEED_PRESET_COUNT] = {
+	"1 DAY/SEC", "1 WK/SEC", "1 YR/SEC"
+};
+#define DEG_TO_RAD 0.017453292519943295
+#define TAU 6.283185307179586
+// Base axial-spin rate (rad per sim-day): the old per-frame step was
+// 0.001/planet.day; times OLD_TICKS_PER_DAY gives rad-per-day.
+#define SPIN_BASE_RAD_PER_DAY (0.001f * OLD_TICKS_PER_DAY)
+
+// Normalize an angle (radians) into [0, TAU). simDays grows without bound in
+// a long-lived run, so reducing it before storing keeps the angles as small
+// floats instead of huge ones.
+static float normAngle2pi(double a)
+{
+	double r = a - TAU * floor(a / TAU);
+	if (r < 0.0)
+		r += TAU;
+	if (r >= TAU)
+		r -= TAU;
+	return (float)r;
+}
+
+// Calendar (struct tm, UTC) -> Julian Date (days; 00:00 UT is a .5).
+static double tmToJD(const struct tm *t)
+{
+	int y = t->tm_year + 1900;
+	int m = t->tm_mon + 1;
+	if (m <= 2)
+	{
+		y--;
+		m += 12;
+	}
+	int A = y / 100;
+	int B = 2 - A + A / 4;
+	long JDN = (long)(365.25 * (y + 4716)) + (long)(30.6001 * (m + 1))
+		+ t->tm_mday + B - 1524;
+	return (double)JDN - 0.5
+		+ t->tm_hour / 24.0 + t->tm_min / 1440.0 + t->tm_sec / 86400.0;
+}
+
+// Julian Date -> broken-down UTC date/time (Fliegel-Van Flandern).
+static void jdToCalendar(double JD, int *yy, int *mo, int *dd,
+	int *hh, int *mi, int *ss)
+{
+	double Z = floor(JD + 0.5);
+	double F = JD + 0.5 - Z;                 // fraction of the day (0 at 00:00 UT)
+	long alpha = (long)((Z - 1867216.25) / 36524.25);
+	long A = (long)Z + 1 + alpha - alpha / 4;
+	long B = A + 1524;
+	long C = (long)((B - 122.1) / 365.25);
+	long D = (long)(365.25 * C);
+	long E = (long)((B - D) / 30.6001);
+	long day = B - D - (long)(30.6001 * E);  // 1-based day of month
+	long month = (E < 14) ? (E - 1) : (E - 13);
+	long year = (month > 2) ? (C - 4716) : (C - 4715);
+	*yy = (int)year;
+	*mo = (int)month;
+	*dd = (int)day;
+	int total = (int)(F * 86400.0);
+	*hh = total / 3600;
+	total %= 3600;
+	*mi = total / 60;
+	*ss = total % 60;
+}
+
+// Set simDays to the current UTC date/time (J2000-relative) so every body
+// starts at its real heliocentric position for "now".
+static void initSimTime(void)
+{
+	time_t now = time(NULL);
+	const struct tm *utc = gmtime(&now);
+	if (utc)
+		simDays = tmToJD(utc) - 2451545.0;
+}
+
+// Recompute every body's absolute angle from simDays (planets, spins, moons),
+// set the belt clock, and step the comets by dDays (in days). Planets, spins,
+// moons and the belt are pure functions of simDays, so changing speed never
+// accumulates error; comets integrate their 1/r^2 anomaly, so they take the
+// per-step dDays.
+void updateBodies(float dDays)
+{
+	double d = simDays;
+	int i;
+	for (i = 0; i < 11; i++)
+	{
+		orbitSpeedArray[i] = normAngle2pi(
+			(planetLon0Deg[i] + planetLonRateDegPerDay[i] * d) * DEG_TO_RAD);
+		rotationSpeedArray[i] = normAngle2pi(
+			SPIN_BASE_RAD_PER_DAY / planetInstanceArray[i].day * d);
+	}
+	for (i = 0; i < loadedMoonCount; i++)
+		moonOrbitSpeedArray[i] = normAngle2pi(
+			MOON_BASE_RAD_PER_DAY / moonInstanceArray[i].orbit * d);
+	beltTime = (float)d;
+	for (i = 0; i < COMET_COUNT; i++)
+		updateComet(&comets[i], dDays);
+}
 float planetScaleMult = 100.0;
 float planetRadMult = 2000.0;
 float moonRadMult = 500.0;
@@ -690,13 +850,17 @@ void initBelt(belt *b, char *path, int count,
 		data[i].orbitRadius = rMin + beltRand() * (rMax - rMin);
 		// Small random height above/below the ecliptic.
 		data[i].height = (beltRand() * 2.0f - 1.0f) * maxHeight;
-		// Same angular-speed rule the planets use, 0.001f/period with
-		// period == radius/AU here, i.e. 0.002f/radiusUnits per tick,
-		// with +/-15% jitter so the belt doesn't rotate as one solid ring.
-		data[i].angSpeed = 0.002f / data[i].orbitRadius * (0.85f + 0.30f * beltRand());
+		// Angular speed in rad per simulated day. The old per-60-Hz-step value
+		// (0.002f/orbitRadius, i.e. 0.001f/period with period == radius/AU)
+		// times OLD_TICKS_PER_DAY steps/day, with +/-15% jitter so the belt
+		// doesn't rotate as one solid ring. The belt shader advances
+		// angle = aOrbit.w + uTime * aOrbit.z with uTime now in days.
+		data[i].angSpeed = 0.002f / data[i].orbitRadius * (0.85f + 0.30f * beltRand())
+			* OLD_TICKS_PER_DAY;
 		data[i].phase = beltRand() * 6.2831853f;
 		data[i].scale = sMin + beltRand() * (sMax - sMin);
-		data[i].spinSpeed = (0.5f + beltRand()) * 0.01f;
+		// Self-spin, rad per simulated day (old per-frame step x steps/day).
+		data[i].spinSpeed = (0.5f + beltRand()) * 0.01f * OLD_TICKS_PER_DAY;
 		if(beltRand() < 0.5f)
 			data[i].spinSpeed = -data[i].spinSpeed;
 		data[i].spinPhase = beltRand() * 6.2831853f;
@@ -706,12 +870,19 @@ void initBelt(belt *b, char *path, int count,
 	glGenVertexArrays(1, &b->vao);
 	glBindVertexArray(b->vao);
 
-	// Mesh stream: positions then normals (same layout as initObject).
+	// Mesh stream: positions then normals (same layout as initObject). The
+	// loader emits flat per-face normals (one per vertex of each triangle);
+	// weld them to smooth per-vertex normals exactly like planet rendering
+	// so the rocks shade smoothly instead of as a stack of facets.
+	vec3 *smooth = malloc(sizeof(vec3) * b->mesh.vertexNumber);
+	generateSmoothNormals(b->mesh.vertexNumber, smooth, b->mesh.points, b->mesh.normals);
+
 	glGenBuffers(1, &b->vbo);
 	glBindBuffer(GL_ARRAY_BUFFER, b->vbo);
 	glBufferData(GL_ARRAY_BUFFER, b->mesh.size + b->mesh.nsize, NULL, GL_STATIC_DRAW);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, b->mesh.size, b->mesh.points);
-	glBufferSubData(GL_ARRAY_BUFFER, b->mesh.size, b->mesh.nsize, b->mesh.normals);
+	glBufferSubData(GL_ARRAY_BUFFER, b->mesh.size, b->mesh.nsize, smooth);
+	free(smooth);
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(0));
 	glEnableVertexAttribArray(1);
@@ -796,17 +967,25 @@ void initComets()
 	c->p = seedQ[ci] * (1.0f + c->e);
 	c->dir = seedDir[ci];
 	c->theta = seedPhase[ci] * 3.14159265358979f; // stagger the three comets
-	c->orbitK = COMET_ORBIT_K * seedKMult[ci];
+	// Speed in rad per simulated day: the old per-60-Hz-step constant
+	// multiplied by OLD_TICKS_PER_DAY steps/day (see updateComet).
+	c->orbitK = COMET_ORBIT_K * seedKMult[ci] * OLD_TICKS_PER_DAY;
 	c->spin = beltRand() * 6.2832f;
 
 	// Nucleus VAO: positions then normals (same layout as initBelt).
 	glGenVertexArrays(1, &c->vao);
 	glBindVertexArray(c->vao);
+	// Weld the loader's flat per-face normals into smooth per-vertex normals
+	// before upload (same path as the belt and planet meshes).
+	vec3 *nuc = malloc(sizeof(vec3) * c->mesh.vertexNumber);
+	generateSmoothNormals(c->mesh.vertexNumber, nuc, c->mesh.points, c->mesh.normals);
+
 	glGenBuffers(1, &c->vbo);
 	glBindBuffer(GL_ARRAY_BUFFER, c->vbo);
 	glBufferData(GL_ARRAY_BUFFER, c->mesh.size + c->mesh.nsize, NULL, GL_STATIC_DRAW);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, c->mesh.size, c->mesh.points);
-	glBufferSubData(GL_ARRAY_BUFFER, c->mesh.size, c->mesh.nsize, c->mesh.normals);
+	glBufferSubData(GL_ARRAY_BUFFER, c->mesh.size, c->mesh.nsize, nuc);
+	free(nuc);
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(0));
 	glEnableVertexAttribArray(1);
@@ -853,26 +1032,29 @@ void initComets()
 	glVertexAttribDivisor(2, 1);
 
 	glBindVertexArray(0);
-	updateComet(c, 1.0f);   // one reference-frame step to seed initial pose
+	// Seed the derived pose (r, pos, tail) at the chosen anomaly without
+	// advancing: dDays=0 keeps theta exactly at seedPhase.
+	updateComet(c, 0.0f);
 	}
 }
 
-void updateComet(comet *c, float timeScale)
+void updateComet(comet *c, float dDays)
 {
 	// Ellipse, sun at the focus (origin): r = p / (1 + e cos theta), with
 	// perihelion at theta = 0 and aphelion at theta = +/-PI. Advance theta by
-	// K/r^2 per 60-Hz reference frame, scaled by timeScale:
+	// (K / r^2) * dDays, where K (c->orbitK) is in rad per simulated day:
 	// equal-area-in-equal-time, so it whips around perihelion and crawls far
-	// out, like a real comet, at a real-time constant pace regardless of fps.
+	// out, like a real comet, at a pace tied to the sim clock. dDays is the
+	// sim-days stepped this frame (updateBodies), so a pause steps it by 0.
 	// The whole conic is rotated by c->dir so perihelion points along a chosen
 	// world direction (kept near the default camera's line of sight).
 	float ang = c->theta + c->dir;
 	float r = c->p / (1.0f + c->e * cosf(c->theta));
 	float dTheta = c->orbitK / (r * r);
-	c->theta -= dTheta * timeScale;
+	c->theta -= dTheta * dDays;
 	if(c->theta < -3.14159265358979f)
 		c->theta += 6.28318530717959f; // wrap at aphelion: same point, no visible reset
-	c->spin += 0.005f * timeScale;
+	c->spin += 0.005f * OLD_TICKS_PER_DAY * dDays;
 
 	ang = c->theta + c->dir;
 	r = c->p / (1.0f + c->e * cosf(c->theta));
@@ -2072,6 +2254,12 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "[trace] main: perspective\n");
 	createPerspectiveMatrix();
 
+	// Start the sim clock at the current UTC date/time and prime every body
+	// angle from it, so the scene opens on the real sky (planets at their
+	// current heliocentric mean longitudes).
+	initSimTime();
+	updateBodies(0.0f);
+
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_MULTISAMPLE);
 	glCullFace(GL_BACK);
@@ -2082,12 +2270,17 @@ int main(int argc, char *argv[])
 	setupUIButtons();
 	setupUIMoonButtons();
 	uiSetupCameraSliders();
+	// Sim-speed presets (1 day / 1 week / 1 year per second of real time).
+	uiAddTextButton(UI_ACT_SPEED_BASE + 0, simSpeedLabels[0]);
+	uiAddTextButton(UI_ACT_SPEED_BASE + 1, simSpeedLabels[1]);
+	uiAddTextButton(UI_ACT_SPEED_BASE + 2, simSpeedLabels[2]);
 	{
 		int ww, wh;
 		glfwGetWindowSize(window, &ww, &wh);
 		uiLayoutColumn(ww, wh, UI_TARGET_COUNT);
 		uiLayoutPanels(ww, wh);
 		uiLayoutSliders(ww, wh, UI_SLIDER_COUNT);
+		uiLayoutTextButtons(ww, wh);
 	}
 	// Some moons may be missing on disk, so the count above can land below
 	// 100%; force one final full-bar frame before handing over to the scene.
@@ -2143,34 +2336,46 @@ int main(int argc, char *argv[])
 		// anything behind it while still being occluded by anything in front.
 		drawSun();
 
+		/* HUD clock: the current sim date, its offset from J2000, and the
+		   active speed preset (or PAUSED). uiDrawText sets up its own shader
+		   state, so it runs just before the widget pass below. */
+		{
+			int yy, mo, dd, hh, mi, ss;
+			jdToCalendar(simDays + 2451545.0, &yy, &mo, &dd, &hh, &mi, &ss);
+			char dateBuf[64];
+			char offBuf[64];
+			char spdBuf[48];
+			sprintf(dateBuf, "%04d-%02d-%02d %02d:%02d:%02d", yy, mo, dd, hh, mi, ss);
+			sprintf(offBuf, "J2000 %+.1f D", simDays);
+			if (stopRotation == 0)
+				sprintf(spdBuf, "%d  %s", simSpeedIndex + 1, simSpeedLabels[simSpeedIndex]);
+			else
+				strcpy(spdBuf, "PAUSED");
+			uiDrawText(dateBuf, 24.0f, 24.0f, 2.0f, 1.0f, 1.0f, 1.0f, 0.95f);
+			uiDrawText(offBuf, 24.0f, 44.0f, 1.6f, 0.72f, 0.78f, 0.90f, 0.90f);
+			uiDrawText(spdBuf, 24.0f, 64.0f, 1.6f, 0.85f, 0.85f, 0.85f, 0.85f);
+			for (int si = 0; si < SIM_SPEED_PRESET_COUNT; si++)
+				uiSetTextButtonSelected(UI_ACT_SPEED_BASE + si, simSpeedIndex == si);
+		}
+
 		/* UI last: no depth test, standard alpha blend, its own state. */
 		uiDrawAll(followTarget, stopRotation);
 
 		if(stopRotation == 0){
-			// Frame-rate independent motion: the tuning constants below are
-			// per-60-Hz-frame steps; timeScale = 60*deltaTime advances them
-			// by the correct amount of real time at any fps. Clamped so the
-			// first frame (deltaTime spans the whole texture load) and long
-			// stalls advance a few steps, not a teleport.
-			float timeScale = deltaTime * 60.0f;
-			if (timeScale > 4.0f)
-				timeScale = 4.0f;
-			for(int i = 0; i < 11; i++)
+			// The sim clock (days since J2000) advances by the active speed
+			// preset times the frame delta. Every body position is recomputed
+			// absolutely from simDays in updateBodies, so it is frame-rate
+			// independent and speed changes never accumulate error. Clamped so
+			// the first frame (deltaTime spans the whole texture load) and long
+			// stalls advance a few days, not a teleport.
+			float dDays = (float)(simDaysPerSec * deltaTime);
+			if (dDays > 10.0f)
+				dDays = 10.0f;
+			if (dDays > 0.0f)
 			{
-				orbitSpeedArray[i] += 0.001f/planetInstanceArray[i].orbit * timeScale;
+				simDays += dDays;
+				updateBodies(dDays);
 			}
-			for(int i = 0; i < 11; i++)
-			{
-				rotationSpeedArray[i] += 0.001f/planetInstanceArray[i].day * timeScale;
-			}
-			for(int i = 0; i < loadedMoonCount; i++)
-			{
-				moonOrbitSpeedArray[i] += 0.0001f/moonInstanceArray[i].orbit * timeScale;
-			}
-			beltTime += timeScale;
-			for(int ci = 0; ci < COMET_COUNT; ci++)
-				updateComet(&comets[ci], timeScale);
-			theta += 0.009f * timeScale;
 		}
 
 		glfwSwapBuffers(window);
@@ -2258,6 +2463,19 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		else
 			stopRotation = 0;
     }
+    // Sim-speed presets: 1 day/sec, 1 week/sec, 1 year/sec.
+    if (key == GLFW_KEY_1 && action == GLFW_PRESS){
+		simSpeedIndex = 0;
+		simDaysPerSec = simSpeedPresetDaysPerSec[0];
+    }
+    if (key == GLFW_KEY_2 && action == GLFW_PRESS){
+		simSpeedIndex = 1;
+		simDaysPerSec = simSpeedPresetDaysPerSec[1];
+    }
+    if (key == GLFW_KEY_3 && action == GLFW_PRESS){
+		simSpeedIndex = 2;
+		simDaysPerSec = simSpeedPresetDaysPerSec[2];
+    }
 }
 
 
@@ -2283,6 +2501,13 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 		if (id == UI_ACT_PAUSE)
 		{
 			stopRotation = stopRotation ? 0 : 1;
+		}
+		else if (id >= UI_ACT_SPEED_BASE && id < UI_ACT_SPEED_BASE + SIM_SPEED_PRESET_COUNT)
+		{
+			/* Sim-speed preset buttons are 300+index. */
+			int si = id - UI_ACT_SPEED_BASE;
+			simSpeedIndex = si;
+			simDaysPerSec = simSpeedPresetDaysPerSec[si];
 		}
 		else if (id >= UI_ACT_TOGGLE_BASE)
 		{
@@ -2329,6 +2554,7 @@ void window_size_callback(GLFWwindow* window, int width, int height)
 	uiLayoutColumn(width, height, UI_TARGET_COUNT);
 	uiLayoutPanels(width, height);
 	uiLayoutSliders(width, height, UI_SLIDER_COUNT);
+	uiLayoutTextButtons(width, height);
 }
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)

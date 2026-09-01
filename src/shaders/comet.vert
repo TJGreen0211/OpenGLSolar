@@ -16,11 +16,8 @@ void main()
 	fWorldPos = wp.xyz;
 	fNormal = mat3(model) * aNormal;
 
-	// Same guard as belt.vert: the rock is convex and origin-centred, so an
-	// outward normal always points away from the local origin.
-	if(dot(fNormal, aPosition) < 0.0)
-		fNormal = -fNormal;
-
+	// aNormal is already outward (loader centroid test + CPU smooth weld);
+	// the old guard (see belt.vert) flipped the lit side away from the sun.
 	// Row-vector chain, as in planet.vert.
 	gl_Position = wp * view * projection;
 }

@@ -27,6 +27,7 @@
 #define UI_ACT_PLANET_BASE 0  // planet follow targets 0..10
 #define UI_ACT_MOON_BASE   100 // moon follow targets 100+m
 #define UI_ACT_TOGGLE_BASE 200 // collapsible moon-panel toggles, 200+planet
+#define UI_ACT_SPEED_BASE  300 // sim-speed presets, 300+index (see Main.c)
 
 #define UI_MAX_BUTTONS 48
 
@@ -60,6 +61,17 @@ typedef struct uiSlider {
 
 #define UI_MAX_SLIDERS 8
 
+/* Text button: a flat labelled control (the sim-speed presets). Drawn over a
+   dark slot with a bitmap-font label; selected/hovered tint it. */
+#define UI_MAX_TEXTBUTTONS 16
+typedef struct uiTextButton {
+	int id;
+	char label[32];
+	float rect[4];   // x, y, w, h (window px, y-down)
+	int selected;    // 1 = highlighted (the active preset)
+	int hovered;
+} uiTextButton;
+
 typedef void (*uiSliderChangedFn)(int id, float t);
 
 void attachGUIShaders();
@@ -86,6 +98,16 @@ void uiSetMouse(float x, float y);
 int  uiHitTest(float x, float y);
 void uiDrawAll(int followedId, int pauseActive);
 void uiShutdown(void);
+
+/* Bitmap-font text and labelled buttons, for the date/speed HUD. px is the
+   per-glyph-pixel scale (1.0 = 5x7 px glyphs); x,y anchor the text's top-left
+   in window pixels (y-down), same space as glfwGetCursorPos. */
+void uiDrawText(const char *text, float x, float y, float px,
+                float r, float g, float b, float a);
+int  uiAddTextButton(int id, const char *label);
+int  uiTextButtonCount(void);
+void uiLayoutTextButtons(int winW, int winH);
+void uiSetTextButtonSelected(int id, int selected);
 
 #define BUFFER_OFFSET( offset )   ((char*)NULL+(offset))
 

@@ -11,6 +11,10 @@ out vec2 TexCoord;
    size; on HiDPI the framebuffer, a uniform scale of window space). */
 uniform vec4 uRect;
 uniform vec2 uViewport;
+/* Icon draws use the full texture (uUVOff 0, uUVScale 1). Text glyphs set
+   these to the sub-rect of one cell in the shared bitmap-font atlas. */
+uniform vec2 uUVOff;
+uniform vec2 uUVScale;
 
 void main()
 {
@@ -19,5 +23,5 @@ void main()
     vec2 ndc = vec2(px.x * 2.0 / uViewport.x - 1.0,
                     1.0 - px.y * 2.0 / uViewport.y);
     gl_Position = vec4(ndc, 0.0, 1.0);
-    TexCoord = texCoord;
+    TexCoord = uUVOff + texCoord * uUVScale;
 }

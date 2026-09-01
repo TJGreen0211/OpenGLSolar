@@ -46,12 +46,12 @@ void main()
 	vec3 p = R * (aPosition * aRock.x);
 	vec3 n = R * aNormal;
 
-	// The loader enforces outward winding, but keep this guard for bad
-	// exports: rocks are convex and origin-centered, so an outward normal
-	// always points away from the local origin.
-	if(dot(n, aPosition) < 0.0)
-		n = -n;
-
+	// aNormal is already outward: the loader enforces it (centroid test) and
+	// the CPU welds it to a smooth normal, so no per-vertex reorientation.
+	// The old guard compared this rotated normal against the unrotated local
+	// position (a frame mismatch) and, because the mesh is not origin-
+	// centred, flipped correct normals as the rock spun — which is what lit
+	// the side facing away from the sun.
 	fWorldPos = p + center;
 	fNormal = n;
 	fShade = fract(sin(aRock.z * 12.9898) * 43758.5453);
