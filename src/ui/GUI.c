@@ -25,8 +25,8 @@ static void uiDrawFlat(float x, float y, float w, float h,
 
 void attachGUIShaders()
 {
-	createShader(&UIShader, "src/shaders/UI.vert",
-		"src/shaders/UI.frag");
+	createShader(&UIShader, "assets/shaders/UI.vert",
+		"assets/shaders/UI.frag");
 	uiLRect = glGetUniformLocation(UIShader, "uRect");
 	uiLColor = glGetUniformLocation(UIShader, "uColor");
 	uiLHasTex = glGetUniformLocation(UIShader, "uHasTex");

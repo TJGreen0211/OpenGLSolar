@@ -1,0 +1,94 @@
+#include "Common.h"
+#include "Main.h"
+#include "Bodies.h"
+#include "Planet.h"
+
+static GLuint planetShader;
+static GLuint planetVAO, planetVBO;
+static int    planetVertexCount;
+
+// World-translation for each planet, written once per frame by Planet_Draw and
+// read by the ring/moon/atmosphere passes (which still sit in Main.c until
+// their own steps move them). Kept here because only the planet pass computes
+// the centres.
+static mat4   planetTransform[PLANET_COUNT];
+
+void Planet_InitGL(sphere mesh)
+{
+	createShader(&planetShader, "assets/shaders/planet.vert",
+		"assets/shaders/planet.frag");
+
+	planetVertexCount = mesh.vertexNumber;
+
+	vec3 *tangent = malloc(sizeof(vec3) * mesh.vertexNumber);
+	generateTangents(mesh.vertexNumber, mesh.points, tangent);
+	vec3 *vna = malloc(sizeof(vec3) * mesh.vertexNumber);
+	generateSmoothNormals(mesh.vertexNumber, vna, mesh.points, mesh.normals);
+
+	glGenVertexArrays(1, &planetVAO);
+	glBindVertexArray(planetVAO);
+	glGenBuffers(1, &planetVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, planetVBO);
+	glBufferData(GL_ARRAY_BUFFER, mesh.size + mesh.nsize + sizeof(vec3) * mesh.vertexNumber, NULL, GL_STATIC_DRAW);
+	glBufferSubData(GL_ARRAY_BUFFER, 0,	mesh.size, mesh.points);
+	glBufferSubData(GL_ARRAY_BUFFER, mesh.size, mesh.nsize, vna);
+	glBufferSubData(GL_ARRAY_BUFFER, mesh.size+mesh.nsize, sizeof(vec3) * mesh.vertexNumber,	tangent);
+
+	GLuint vPosition = glGetAttribLocation(planetShader, "vPosition");
+    glEnableVertexAttribArray(vPosition);
+    glVertexAttribPointer(vPosition, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(0));
+
+    GLuint vNormal = glGetAttribLocation(planetShader, "vNormal");
+    glEnableVertexAttribArray(vNormal);
+    glVertexAttribPointer(vNormal, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(mesh.size));
+
+    GLuint vTangent = glGetAttribLocation(planetShader, "vTangent");
+    glEnableVertexAttribArray(vTangent);
+    glVertexAttribPointer(vTangent, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(mesh.size+mesh.nsize));
+
+	glBindVertexArray(0);
+
+	free(tangent);
+	free(vna);
+}
+
+void Planet_Draw(const ViewMatrices *vm)
+{
+	glUseProgram(planetShader);
+	glSetupPlanetLighting(planetShader);
+	for(int i = 0; i < PLANET_COUNT; i++)
+	{
+		vec3 translation;
+		translation.x = Bodies_Planets()[i].radius * (float)cos(Bodies_OrbitSpeed(i));
+		translation.y = 0.0;
+		translation.z = Bodies_Planets()[i].radius * (float)sin(Bodies_OrbitSpeed(i));
+		mat4 matT = multiplymat4(translatevec3(translation), scale(Bodies_Planets()[i].size));
+		mat4 matR = multiplymat4(rotateY(Bodies_RotationSpeed(i)), rotateX(Bodies_Planets()[i].axialTilt+45.0f));
+		mat4 m = multiplymat4(matT,matR);
+		planetTransform[i] = translatevec3(translation);
+
+		glSetupMVP(planetShader, m, vm, vm->frame);
+
+    	glBindVertexArray (planetVAO);
+    	bindTexture(GL_TEXTURE0, Bodies_Planets()[i].texture);
+    	bindTexture(GL_TEXTURE1, Bodies_Planets()[i].normal);
+    	bindTexture(GL_TEXTURE2, Bodies_Planets()[i].displacement);
+    	glUniform1i(glGetUniformLocation(planetShader, "tex"), 0);
+    	glUniform1i(glGetUniformLocation(planetShader, "normalTex"), 1);
+    	glUniform1i(glGetUniformLocation(planetShader, "depthMap"), 2);
+    	glUniformMatrix4fv( glGetUniformLocation(planetShader, "translation" ), 1, GL_FALSE, &matT.m[0][0] );
+    	glDrawArrays( GL_TRIANGLES, 0, planetVertexCount);
+    	glBindVertexArray(0);
+    }
+}
+
+GLuint Planet_Shader(void)          { return planetShader; }
+GLuint Planet_VAO(void)             { return planetVAO; }
+int    Planet_MeshVertexCount(void) { return planetVertexCount; }
+const mat4 *Planet_Transforms(void) { return planetTransform; }
+
+void Planet_Shutdown(void)
+{
+	glDeleteVertexArrays(1, &planetVAO);
+	glDeleteBuffers(1, &planetVBO);
+}

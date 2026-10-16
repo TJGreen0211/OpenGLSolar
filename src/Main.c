@@ -10,40 +10,19 @@
 #include <sys/stat.h>
 #endif
 #include "Main.h"
+#include "LoadingScreen.h"
+#include "Bodies.h"
+#include "SimTime.h"
+#include "Belt.h"
+#include "Comet.h"
+#include "Skybox.h"
+#include "Sun.h"
+#include "Orbits.h"
+#include "Planet.h"
+#include "Rings.h"
+#include "Moon.h"
+#include "Atmosphere.h"
 
-typedef struct moonParameters {
-	float radius;
-	float size;
-	float orbit;
-	int planet;
-	GLuint texture;
-	GLuint normal;
-} moonParameters;
-
-typedef struct planetParameters {
-	float radius;
-	float size;
-	float orbit;
-	float axialTilt;
-	float day;
-	int createAtmosphere;
-	int createRing;
-	int numMoons;
-	float ringInner;
-	float ringOuter;
-	GLuint texture;
-	GLuint normal;
-	GLuint displacement;
-	GLuint ringTex;
-	mat4 planetLocation;
-
-} planetParameters;
-
-typedef struct atmosphereParameters {
-	float scaleFactor;
-	float E;
-	vec3 C_R;
-} atmosphereParameters;
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
@@ -51,9 +30,6 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 void window_size_callback(GLFWwindow* window, int width, int height);
 GLuint loadShader(char *vertex_path, char *fragement_path);
-void initLoadingScreen();
-void renderLoadingScreen(float progress);
-void finishLoadingStep();
 #ifdef _WIN32
 static GLADapiproc gladGetProcAddress(const char *name);
 #endif
@@ -61,136 +37,31 @@ static GLADapiproc gladGetProcAddress(const char *name);
 const float WIDTH = 1400, HEIGHT = 800;
 float ASPECT = 1400.0f/800.0f;
 
-sphere planet, sun, atmosphere;
-obj object;
+sphere planet;
 int keys;
 int actionPress;
 
 float zNear = 0.5, zFar = 100000.0;
 
-GLuint sunTexture;
-GLuint sunNormal;
-
-GLuint moonNormalTexture;
-GLuint moonDisplacementTexture;
-GLuint skyboxShader, sunShader, planetShader, atmosphereShader, ringShader;
-GLuint vertUIShader, fragUIShader;
-GLuint vPosition, vNormal, vTangent, vBitangent;
-GLuint planetVAO, planetVBO, skyboxVAO, skyboxVBO, objectVAO, objectVBO, atmosphereVAO, atmosphereVBO;
-GLuint sunQuadVAO, sunQuadVBO;
-GLuint orbitShader, orbitVAO, orbitVBO;
-GLuint ringVAO[11], ringVBO[11];
-ring ringArray[11];
-
-// GPU-instanced asteroid + Kuiper belts (initBelts/drawBelts). Each rock
-// carries its whole orbit as instance data; the vertex shader advances it
-// from uTime, so the belts cost two instanced draws per frame.
-typedef struct beltRockData {
-	float orbitRadius, height, angSpeed, phase;  // aOrbit
-	float scale, spinSpeed, spinPhase, tilt;     // aRock
-} beltRockData;
-
-typedef struct belt {
-	char *meshPath;
-	obj mesh;
-	GLuint vao, vbo, ibo;
-	int count;
-} belt;
-
-belt asteroidBelt;
-belt kuiperBelt;
-GLuint beltShader;
-float beltTime = 0.0f;
-
-// Highly-eccentric-ellipse comet with a billboarded particle tail (initComets /
-// updateComet / drawComets). The nucleus is a small rock; the tail is a fan
-// of camera-facing soft sprites run anti-sunward from the nucleus, with
-// length and brightness both proportional to 1/r^2.
-// Number of comets in the scene. Each gets its own perihelion distance,
-// aphelion distance, approach angle, orbit phase, and speed (seeded in
-// initComets), so they cross the system at different intervals from
-// different directions.
-#define COMET_COUNT        3
-// Each comet is a flat highly-eccentric ellipse (sun at the focus): a close
-// perihelion q (dive into the sun) and a far aphelion (long arc out into the
-// system). Its visibility is tied to distance from the sun exactly like a
-// real comet: fully bright close in, smoothly fading to invisible beyond
-// COMET_VIS_FAR * q. The full anomaly wrap at +/-PI happens at aphelion while
-// faded out, so the slow far arc is never seen and what the eye catches is
-// the fast, bright close pass. Keeping this tight (~2.6q) means there is no
-// "faint dot drifting in the distance" at all.
-#define COMET_VIS_FAR      2.6f      // invisible beyond this many perihelion distances
-#define COMET_TAIL_MAX     12000.0f  // tail length at perihelion
-#define COMET_ORBIT_K      70000.0f  // base speed; dTheta/frame = K / r^2, scaled per comet
-#define COMET_PARTICLES    132
-#define COMET_NUCLEUS_SCALE 14.0f
-
-typedef struct comet {
-	obj mesh;
-	GLuint vao, vbo;          // nucleus: positions + normals
-	GLuint tailVao, quadVbo, tailVbo;
-	int  particleCount;
-	float theta;              // true anomaly (rad from perihelion), decreasing
-	float q;                  // perihelion distance
-	float e;                  // eccentricity = (rA - q) / (rA + q)
-	float p;                  // semi-latus rectum = q (1 + e)
-	float dir;                // orientation: world angle of perihelion (rad)
-	float orbitK;             // per-comet speed (dTheta per 60-Hz reference frame = orbitK / r^2)
-	float spin;
-	// Per-frame derived state (set by updateComet, read by drawComets).
-	vec3 pos;
-	float r;
-	vec3 tailDir;
-	float tailLen, tailWidth, tailAlpha;
-	float vis;                  // 0..1 distance-based visibility (bright in, fades out)
-} comet;
-
-comet comets[COMET_COUNT];
-GLuint cometShader, tailShader;
-
-// Defined further down; drawn before initMVP's definition, so forward-declare.
-void initMVP(int shader, mat4 m, mat4 v);
-
-void initComets();
-void updateComet(comet *c, float dDays);
-void drawComets();
-GLuint shadowFBO, depthMap, rboDepth;
-GLuint ModelView, projection, model, view;
 mat4 p, v;
 
 GLfloat deltaTime = 0.0f;
 GLfloat lastFrame = 0.0f;
-int stopRotation = 0;
-int gFrame = 0;   // bumped once per render-loop iteration; keys the initMVP cache
+int gFrame = 0;   // bumped once per render-loop iteration; keys the glSetupMVP cache
+ViewMatrices appView;   // { proj, view } built once per frame for glSetupMVP
 
 /* Camera follow state, set by the UI buttons. The value is the same space as
    a uiHitTest result (and a uiButton id), so each trackable body has one:
    UI_ACT_NONE (-3) = free camera (WASD moves it), UI_ACT_SUN (-1) = sun/
-   overview pinned at the origin, 0..10 = planetInstanceArray[i], 100+m =
-   moonInstanceArray[m]. Pause (-2) and toggles (200+) are controls, never
+   overview pinned at the origin, 0..10 = Bodies_Planets()[i], 100+m =
+   Bodies_Moons()[m]. Pause (-2) and toggles (200+) are controls, never
    targets. focusDolly runs the one-shot distance glide right after a target
    button is clicked. */
 int followTarget = UI_ACT_NONE;
 int focusDolly = 0;
 
-// Loading screen state. loadWindow is the GL context the loading frames are
-// drawn on; it is set in main() right after setupGLFW() and read by the
-// loader functions (planet/moon texture loops) so they can redraw the bar.
-GLFWwindow *loadWindow = NULL;
-GLuint loadingShader, loadingVAO, loadingVBO;
-int loadStepDone = 0;
-
-
-// Worst-case number of discrete load steps: skybox (1) + sun (2) +
-// planet textures (11x3) + moons (neutral normal 1 + displacement 1 + up to
-// MAX_MOONS textures) + atmosphere (1) + init (1) + UI buttons (13) +
-// moon panels (up to 11 toggles + MAX_MOONS moon buttons) + UI shader (1).
-// If some moon textures are missing the bar tops out below 100% and the
-// final frame forces it to 1.0, which is fine.
-#define LOAD_TOTAL_STEPS (1 + 2 + 33 + 2 + MAX_MOONS + 16 + 11 + MAX_MOONS)
-
 /* One entry per button in the right-edge column, top to bottom: sun/
-   overview, planets in planetInstanceArray order (0..10), pause last.
+   overview, planets in Bodies_Planets() order (0..10), pause last.
    actId is the uiHitTest value (-2 pause, -1 sun, 0..10 planet). Moons are
    NOT in this list — setupUIMoonButtons() adds each planet's chevron toggle
    (200+planet) and moon buttons (100+moon) dynamically. */
@@ -217,1149 +88,16 @@ static const struct uiTargetDef uiTargets[UI_TARGET_COUNT] = {
 	{ "assets/textures/buttonUp.png",        "assets/textures/buttonDown.png", UI_ACT_PAUSE },
 };
 
-#define MAX_MOONS 21
-// Vertices per orbit circle (drawOrbits draws a GL_LINE_LOOP of this size).
-#define ORBIT_SEGMENTS 256
-int numPlanets = 11;
-planetParameters planetInstanceArray[11];
-atmosphereParameters atmosphereArray[11];
-moonParameters moonInstanceArray[MAX_MOONS];
-mat4 modelMatrices[11];
-mat4 planetTransform[11];
-float orbitSpeedArray[11] = {0};
-float rotationSpeedArray[11] = {0};
-float moonOrbitSpeedArray[MAX_MOONS] = {0};
-int loadedMoonCount = 0;
-
-// --- Simulation clock -------------------------------------------------------
-// All motion is a pure function of simDays, the number of calendar days since
-// the J2000 epoch (2000-01-01 12:00 TT). On startup simDays is set to the
-// current UTC date/time, so the planets begin at their real heliocentric mean
-// longitudes. Each frame, if not paused, simDays advances by
-// simDaysPerSec * deltaTime and updateBodies() recomputes every angle
-// absolutely (no per-frame accumulation), so changing speed never drifts or
-// teleports a body. simDaysPerSec is chosen from the three on-screen presets.
-double simDays = 0.0;
-double simDaysPerSec = 1.0;
-#define SIM_SPEED_PRESET_COUNT 3
-static const double simSpeedPresetDaysPerSec[SIM_SPEED_PRESET_COUNT] = {
-	1.0,        // 1 day per second of real time (default)
-	7.0,        // 1 week per second
-	365.25      // 1 year per second
-};
-int simSpeedIndex = 0;
-// Ticks (of the old 60-Hz reference frame) per simulated day. The old motion
-// constants were tuned per 60-Hz frame at a fixed pace of 3.48898 sim-days/sec,
-// so one old day = 60/3.48898 frames. Used to rebase the belt spin and comet
-// speeds from per-frame to rad-per-day.
-#define OLD_TICKS_PER_DAY 17.2023f
-// Base moon angular rate: the old per-frame step was 0.0001/moon.orbit rad;
-// times OLD_TICKS_PER_DAY rad-per-day gives 0.00172023/moon.orbit.
-#define MOON_BASE_RAD_PER_DAY 0.00172023
-
-// Heliocentric ecliptic mean longitude (deg) at J2000 and mean motion
-// (deg/day) for each body, matching planetInstanceArray order (0 Mercury ..
-// 10 Eris). Rates are 360/period-in-days; L0 anchors each orbit to the real
-// sky at startup (see planetLon0Deg comment). Planet longitudes are mean
-// (elliptical correction omitted) which is within a few degrees of the true
-// value for this visual model.
-static const float planetLon0Deg[11] = {
-	252.25084f,  // Mercury
-	181.97973f,  // Venus
-	100.46435f,  // Earth
-	355.45332f,  // Mars
-	152.00000f,  // Ceres
-	34.40438f,   // Jupiter
-	49.94432f,   // Saturn
-	313.23810f,  // Uranus
-	304.88003f,  // Neptune
-	238.92903f,  // Pluto
-	8.22000f     // Eris
-};
-static const float planetLonRateDegPerDay[11] = {
-	4.092338f,   // Mercury (87.969 d)
-	1.602130f,   // Venus   (224.701 d)
-	0.985647f,   // Earth   (365.256 d)
-	0.524027f,   // Mars    (686.980 d)
-	0.214115f,   // Ceres   (1681.65 d)
-	0.083084f,   // Jupiter (4332.59 d)
-	0.033468f,   // Saturn  (10759.2 d)
-	0.011731f,   // Uranus  (30688.5 d)
-	0.005981f,   // Neptune (60182 d)
-	0.003975f,   // Pluto   (90560 d)
-	0.00176025f  // Eris    (204516 d)
-};
-// Labels for the on-screen speed buttons and the HUD readout, matching
-// simSpeedPresetDaysPerSec order.
-static const char *simSpeedLabels[SIM_SPEED_PRESET_COUNT] = {
-	"1 DAY/SEC", "1 WK/SEC", "1 YR/SEC"
-};
-#define DEG_TO_RAD 0.017453292519943295
-#define TAU 6.283185307179586
-// Base axial-spin rate (rad per sim-day): the old per-frame step was
-// 0.001/planet.day; times OLD_TICKS_PER_DAY gives rad-per-day.
-#define SPIN_BASE_RAD_PER_DAY (0.001f * OLD_TICKS_PER_DAY)
-
-// Normalize an angle (radians) into [0, TAU). simDays grows without bound in
-// a long-lived run, so reducing it before storing keeps the angles as small
-// floats instead of huge ones.
-static float normAngle2pi(double a)
-{
-	double r = a - TAU * floor(a / TAU);
-	if (r < 0.0)
-		r += TAU;
-	if (r >= TAU)
-		r -= TAU;
-	return (float)r;
-}
-
-// Calendar (struct tm, UTC) -> Julian Date (days; 00:00 UT is a .5).
-static double tmToJD(const struct tm *t)
-{
-	int y = t->tm_year + 1900;
-	int m = t->tm_mon + 1;
-	if (m <= 2)
-	{
-		y--;
-		m += 12;
-	}
-	int A = y / 100;
-	int B = 2 - A + A / 4;
-	long JDN = (long)(365.25 * (y + 4716)) + (long)(30.6001 * (m + 1))
-		+ t->tm_mday + B - 1524;
-	return (double)JDN - 0.5
-		+ t->tm_hour / 24.0 + t->tm_min / 1440.0 + t->tm_sec / 86400.0;
-}
-
-// Julian Date -> broken-down UTC date/time (Fliegel-Van Flandern).
-static void jdToCalendar(double JD, int *yy, int *mo, int *dd,
-	int *hh, int *mi, int *ss)
-{
-	double Z = floor(JD + 0.5);
-	double F = JD + 0.5 - Z;                 // fraction of the day (0 at 00:00 UT)
-	long alpha = (long)((Z - 1867216.25) / 36524.25);
-	long A = (long)Z + 1 + alpha - alpha / 4;
-	long B = A + 1524;
-	long C = (long)((B - 122.1) / 365.25);
-	long D = (long)(365.25 * C);
-	long E = (long)((B - D) / 30.6001);
-	long day = B - D - (long)(30.6001 * E);  // 1-based day of month
-	long month = (E < 14) ? (E - 1) : (E - 13);
-	long year = (month > 2) ? (C - 4716) : (C - 4715);
-	*yy = (int)year;
-	*mo = (int)month;
-	*dd = (int)day;
-	int total = (int)(F * 86400.0);
-	*hh = total / 3600;
-	total %= 3600;
-	*mi = total / 60;
-	*ss = total % 60;
-}
-
-// Set simDays to the current UTC date/time (J2000-relative) so every body
-// starts at its real heliocentric position for "now".
-static void initSimTime(void)
-{
-	time_t now = time(NULL);
-	const struct tm *utc = gmtime(&now);
-	if (utc)
-		simDays = tmToJD(utc) - 2451545.0;
-}
-
-// Recompute every body's absolute angle from simDays (planets, spins, moons),
-// set the belt clock, and step the comets by dDays (in days). Planets, spins,
-// moons and the belt are pure functions of simDays, so changing speed never
-// accumulates error; comets integrate their 1/r^2 anomaly, so they take the
-// per-step dDays.
+// Recompute every body's absolute angle from simDays via Bodies, then set the
+// belt clock and step the comets by dDays (belt-first, as before). Planets,
+// spins, moons and the belt are pure functions of simDays; comets integrate
+// their 1/r^2 anomaly, so they take the per-step dDays.
 void updateBodies(float dDays)
 {
-	double d = simDays;
-	int i;
-	for (i = 0; i < 11; i++)
-	{
-		orbitSpeedArray[i] = normAngle2pi(
-			(planetLon0Deg[i] + planetLonRateDegPerDay[i] * d) * DEG_TO_RAD);
-		rotationSpeedArray[i] = normAngle2pi(
-			SPIN_BASE_RAD_PER_DAY / planetInstanceArray[i].day * d);
-	}
-	for (i = 0; i < loadedMoonCount; i++)
-		moonOrbitSpeedArray[i] = normAngle2pi(
-			MOON_BASE_RAD_PER_DAY / moonInstanceArray[i].orbit * d);
-	beltTime = (float)d;
-	for (i = 0; i < COMET_COUNT; i++)
-		updateComet(&comets[i], dDays);
-}
-float planetScaleMult = 100.0;
-float planetRadMult = 2000.0;
-float moonRadMult = 500.0;
-// World-space radius of the sun's billboard (its on-screen size is this value
-// projected at the sun's distance, so the sun shrinks as the camera pulls
-// back). Tune larger for a bigger sun, smaller for a smaller one.
-const float SUN_GLOW_RADIUS = 3000.0f;
-vec3 translation;
-
-float getScreenWidth()
-{
-	return HEIGHT;
-}
-
-float getScreenHeight()
-{
-	return WIDTH;
-}
-
-int *loadPlanetTextures(int planetTexArray[])
-{
-	char *textureStrings[] = {"assets/textures/planets/mercury.jpg",
-		"assets/textures/planets/venus.png",
-		"assets/textures/planets/earth.jpg",
-		"assets/textures/planets/mars.jpg",
-		"assets/textures/planets/ceres.jpg",
-		"assets/textures/planets/jupiter.jpg",
-		"assets/textures/planets/saturn.png",
-		"assets/textures/planets/uranus.jpg",
-		"assets/textures/planets/neptune.jpg",
-		"assets/textures/planets/pluto.png",
-		"assets/textures/planets/eris.jpg"};
-	int arraySize = sizeof(textureStrings)/sizeof(textureStrings[0]);
-	for(int i = 0; i < arraySize; i++)
-	{
-		planetTexArray[i] = loadTexture(textureStrings[i]);
-		finishLoadingStep();
-	}
-	return planetTexArray;
-}
-
-int *loadPlanetNormals(int planetTexArray[])
-{
-	char *textureStrings[] = {"assets/textures/planets/mercuryNormal.png",
-		"assets/textures/planets/venusNormal.png",
-		"assets/textures/planets/earthNormal.jpg",
-		"assets/textures/planets/marsNormal.png",
-		"assets/textures/planets/ceresNormal.png",
-		"assets/textures/planets/jupiterNormal.png",
-		"assets/textures/planets/saturnNormal.png",
-		"assets/textures/planets/uranusNormal.png",
-		"assets/textures/planets/neptuneNormal.png",
-		"assets/textures/planets/plutoNormal.png",
-		"assets/textures/planets/erisNormal.png"};
-	int arraySize = sizeof(textureStrings)/sizeof(textureStrings[0]);
-	for(int i = 0; i < arraySize; i++)
-	{
-		planetTexArray[i] = loadTexture(textureStrings[i]);
-		finishLoadingStep();
-	}
-	return planetTexArray;
-}
-
-int *loadPlanetDisplacementMap(int planetTexArray[])
-{
-	char *textureStrings[] = {"assets/textures/planets/earthDisplacement.png",
-		"assets/textures/planets/earthDisplacement.png",
-		"assets/textures/planets/earthDisplacement.png",
-		"assets/textures/planets/jupiterDisplacement.png",
-		"assets/textures/planets/jupiterDisplacement.png",
-		"assets/textures/planets/jupiterDisplacement.png",
-		"assets/textures/planets/jupiterDisplacement.png",
-		"assets/textures/planets/jupiterDisplacement.png",
-		"assets/textures/planets/jupiterDisplacement.png",
-		"assets/textures/planets/jupiterDisplacement.png",
-		"assets/textures/planets/jupiterDisplacement.png"};
-	int arraySize = sizeof(textureStrings)/sizeof(textureStrings[0]);
-	for(int i = 0; i < arraySize; i++)
-	{
-		planetTexArray[i] = loadTexture(textureStrings[i]);
-		finishLoadingStep();
-	}
-	return planetTexArray;
-}
-
-void planetBuilder()
-{
-	planetParameters mercury, venus, earth, mars, eris, jupiter, saturn, uranus, neptune, pluto, ceres;
-	int numTextures = 11;
-	int planetTexArray[11];
-	*planetTexArray = *loadPlanetTextures(planetTexArray);
-
-	int planetNormArray[11];
-	*planetNormArray = *loadPlanetNormals(planetNormArray);
-
-	int planetDisplacementArray[11];
-	*planetDisplacementArray = *loadPlanetDisplacementMap(planetDisplacementArray);
-
-	mercury.radius = 0.4f*planetRadMult; mercury.size = 0.38f*planetScaleMult; mercury.orbit = 0.240846f; mercury.axialTilt = 0.034f; mercury.day = 58.646f; mercury.createAtmosphere = 0; mercury.createRing = 0;
-	mercury.texture = planetTexArray[0]; mercury.normal = planetNormArray[0]; mercury.displacement = planetDisplacementArray[0];
-	venus.radius = 0.7f*planetRadMult; venus.size = 0.9499f*planetScaleMult; venus.orbit = 0.615198f; venus.axialTilt = 177.36f; venus.day = 243.025f; venus.createAtmosphere = 1; venus.createRing = 0;
-	venus.texture = planetTexArray[1]; venus.normal = planetNormArray[1]; venus.displacement = planetDisplacementArray[1];
-	earth.radius = 1.0f*planetRadMult; earth.size = 1.0f*planetScaleMult; earth.orbit = 1.0f; earth.axialTilt = 23.4392811f; earth.day = 1; earth.createAtmosphere = 1; earth.createRing = 0;
-	earth.texture = planetTexArray[2]; earth.normal = planetNormArray[2]; earth.displacement = planetDisplacementArray[2];
-	mars.radius = 1.5f*planetRadMult; mars.size = 0.533f*planetScaleMult; mars.orbit = 1.88f; mars.axialTilt = 25.19f; mars.day = 1.025957f; mars.createAtmosphere = 1; mars.createRing = 0;
-	mars.texture = planetTexArray[3]; mars.normal = planetNormArray[3]; mars.displacement = planetDisplacementArray[3];
-	ceres.radius = 2.77f*planetRadMult; ceres.size = 0.07f*planetScaleMult; ceres.orbit = 4.6f; ceres.axialTilt = 4; ceres.day = 0.3781f; ceres.createAtmosphere = 1; ceres.createRing = 0;
-	ceres.texture = planetTexArray[4]; ceres.normal = planetNormArray[4]; ceres.displacement = planetDisplacementArray[4];
-	jupiter.radius = 5.2f*planetRadMult; jupiter.size = 11.209f*planetScaleMult; jupiter.orbit = 11.8618f; jupiter.axialTilt = 3.13f; jupiter.day = 0.413f; jupiter.createAtmosphere = 1; jupiter.createRing = 0;
-	jupiter.texture = planetTexArray[5]; jupiter.normal = planetNormArray[5]; jupiter.displacement = planetDisplacementArray[5];
-	// ringInner/ringOuter are the ring edges as a multiple of the planet radius
-	saturn.radius = 9.5f*planetRadMult; saturn.size = 9.45f*planetScaleMult; saturn.orbit = 29.4571f; saturn.axialTilt = 26.73f; saturn.day = 0.439583f; saturn.createAtmosphere = 0; saturn.createRing = 1; saturn.ringInner = 1.24f; saturn.ringOuter = 2.27f;
-	saturn.texture = planetTexArray[6]; saturn.normal = planetNormArray[6]; saturn.displacement = planetDisplacementArray[6];
-	uranus.radius = 19.2f*planetRadMult; uranus.size = 4.007f*planetScaleMult; uranus.orbit = 84.0205f; uranus.axialTilt = 97.77f; uranus.day = 0.71833f; uranus.createAtmosphere = 0; uranus.createRing = 1; uranus.ringInner = 1.55f; uranus.ringOuter = 2.05f;
-	uranus.texture = planetTexArray[7]; uranus.normal = planetNormArray[7]; uranus.displacement = planetDisplacementArray[7];
-	neptune.radius = 30.1f*planetRadMult; neptune.size = 3.883f*planetScaleMult; neptune.orbit = 164.8f; neptune.axialTilt = 28.32f; neptune.day = 0.6713f; neptune.createAtmosphere = 0; neptune.createRing = 0;
-	neptune.texture = planetTexArray[8]; neptune.normal = planetNormArray[8]; neptune.displacement = planetDisplacementArray[8];
-	pluto.radius = 39*planetRadMult; pluto.size = 0.18f*planetScaleMult; pluto.orbit = 248; pluto.axialTilt = 119.591f; pluto.day = 6.387230f; pluto.createAtmosphere = 1; pluto.createRing = 0;
-	pluto.texture = planetTexArray[9]; pluto.normal = planetNormArray[9]; pluto.displacement = planetDisplacementArray[9];
-	eris.radius = 68*planetRadMult; eris.size = 0.182f*planetScaleMult; eris.orbit = 558.04f; eris.axialTilt = 61.45f; eris.day = 1.079167f ; eris.createAtmosphere = 1; eris.createRing = 0;
-	eris.texture = planetTexArray[10]; eris.normal = planetNormArray[10]; eris.displacement = planetDisplacementArray[10];
-
-	planetInstanceArray[0] = mercury;
-	planetInstanceArray[1] = venus;
-	planetInstanceArray[2] = earth;
-	planetInstanceArray[3] = mars;
-	planetInstanceArray[4] = ceres;
-	planetInstanceArray[5] = jupiter;
-	planetInstanceArray[6] = saturn;
-	planetInstanceArray[7] = uranus;
-	planetInstanceArray[8] = neptune;
-	planetInstanceArray[9] = pluto;
-	planetInstanceArray[10] = eris;
-
-}
-
-void atmosphereBuilder() {
-	atmosphereParameters mercury, venus, earth, mars, eris, jupiter, saturn, uranus, neptune, pluto, ceres;
-
-	// E   : solar brightness fed to the O'Neil in-scatter integral. Earth = 14.3
-	//       is the reference; the rest scale by inverse-square solar flux
-	//       (1/d_AU^2) so inner planets glow hotter and outer ones dimmer.
-	// C_R : Rayleigh tint (the K_R*C_R term; the white Mie term is summed on top),
-	//       so each limb's hue follows C_R's RGB ratios. Earth = sky-blue.
-	// Only bodies flagged createAtmosphere draw a shell; the rest keep defaults.
-	mercury.scaleFactor = 1.000f;mercury.E = 14.3f; 	mercury.C_R.x = 0.3f; 	mercury.C_R.y = 0.7f; 	mercury.C_R.z = 1.0f;
-	// Dense CO2 over H2SO4 cloud decks -> warm cream; ~1.9x Earth's solar flux.
-	venus.scaleFactor = 1.3008f; venus.E = 27.3f; 	venus.C_R.x = 1.0f; 	venus.C_R.y = 0.86f; 	venus.C_R.z = 0.66f;
-	// N2/O2 Rayleigh blue -- the reference set (leave as-is).
-	earth.scaleFactor = 1.0212f; earth.E = 14.3f; 	earth.C_R.x = 0.3f; 	earth.C_R.y = 0.7f; 	earth.C_R.z = 1.0f;
-	// Thin, dusty CO2 atmosphere -> butterscotch/rose; ~0.43x Earth's solar flux.
-	mars.scaleFactor = 1.0210f; 	mars.E = 6.2f; 		mars.C_R.x = 1.0f; 	mars.C_R.y = 0.60f; 	mars.C_R.z = 0.45f;
-	// Dwarf planet, trace N2/CH4 ices -> faint pale ice-blue. True flux ~0.003
-	// (invisible); E = 1.5 keeps the thin shell (scaleFactor 1.001) faintly visible.
-	eris.scaleFactor = 1.001f; 	eris.E = 1.5f; 		eris.C_R.x = 0.80f; 	eris.C_R.y = 0.86f; 	eris.C_R.z = 0.95f;
-	// H2/He gas giant, ammonia-charged cloud haze -> soft warm cream; ~1/27x sun.
-	jupiter.scaleFactor = 1.1448f;jupiter.E = 0.53f; 	jupiter.C_R.x = 1.0f; 	jupiter.C_R.y = 0.93f; 	jupiter.C_R.z = 0.80f;
-	saturn.scaleFactor = 0.0f; 	saturn.E = 14.3f; 	saturn.C_R.x = 0.3f; 	saturn.C_R.y = 0.7f; 	saturn.C_R.z = 1.0f;
-	uranus.scaleFactor = 0.0f; 	uranus.E = 14.3f; 	uranus.C_R.x = 0.3f; 	uranus.C_R.y = 0.7f; 	uranus.C_R.z = 1.0f;
-	neptune.scaleFactor = 0.0f; 	neptune.E = 14.3f; 	neptune.C_R.x = 0.3f; 	neptune.C_R.y = 0.7f; 	neptune.C_R.z = 1.0f;
-	// Thin N2/CH4 haze -> pale ice-blue. True flux ~0.009 (invisible); E = 2.0
-	// keeps the (stylized) shell faintly visible.
-	pluto.scaleFactor = 3.5000f; pluto.E = 2.0f; 	pluto.C_R.x = 0.75f; 	pluto.C_R.y = 0.83f; 	pluto.C_R.z = 1.0f; // pale ice-blue (kept at 1.0, the blue of the N2 haze)
-	// Trace water-vapor haze (near-airless) -> faint blue-white; shell suppressed
-	// (scaleFactor 0), values kept for completeness.
-	ceres.scaleFactor = 0.0f; 	ceres.E = 1.9f;		ceres.C_R.x = 0.85f; 	ceres.C_R.y = 0.90f; 	ceres.C_R.z = 1.0f;
-
-	atmosphereArray[0] = mercury;
-	atmosphereArray[1] = venus;
-	atmosphereArray[2] = earth;
-	atmosphereArray[3] = mars;
-	atmosphereArray[4] = ceres;
-	atmosphereArray[5] = jupiter;
-	atmosphereArray[6] = saturn;
-	atmosphereArray[7] = uranus;
-	atmosphereArray[8] = neptune;
-	atmosphereArray[9] = pluto;
-	atmosphereArray[10] = eris;
-
-}
-
-static int fileExists(const char *path)
-{
-#ifdef _WIN32
-	return GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES;
-#else
-	struct stat st;
-	return stat(path, &st) == 0 && S_ISREG(st.st_mode);
-#endif
-}
-
-// Moons have no per-moon normal or displacement maps on disk. A neutral
-// tangent-space normal keeps shading plain (loadTexture's black 1x1 fallback
-// would remap to N = (-1,-1,-1)), and a black 1x1 displacement keeps the
-// planet shader's parallax step a no-op.
-static GLuint createNeutralNormalTexture()
-{
-	unsigned char px[3] = {128, 128, 255};
-	GLuint normalTex;
-	glGenTextures(1, &normalTex);
-	glBindTexture(GL_TEXTURE_2D, normalTex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1, 1, 0, GL_RGB, GL_UNSIGNED_BYTE, px);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glBindTexture(GL_TEXTURE_2D, 0);
-	return normalTex;
-}
-
-void moonBuilder()
-{
-	struct moonDef {
-		const char *name;
-		const char *path;
-		int planet;
-		float radius;
-		float size;
-		float orbit;
-	};
-
-	// Historical moon data: radius * moonRadMult, size * planetScaleMult.
-	// Only moons whose texture file exists are drawn, so dropping a file
-	// into one of these paths re-adds that moon.
-	static const struct moonDef defs[MAX_MOONS] = {
-		{ "moon",      "assets/textures/planets/moon.jpg",          2,  1.0f,       0.272704f,  0.083f     },
-		{ "phobos",    "assets/textures/moons/phobos.jpg",     3,  0.015609f,  0.001413f,  0.063014f  },
-		{ "deimos",    "assets/textures/moons/deimos.jpg",     3,  0.037919f,  0.000306f,  0.003425f  },
-		{ "callisto",  "assets/textures/moons/callisto.jpg",   5,  4.883117f,  0.376707f,  0.046575f  },
-		{ "europa",    "assets/textures/moons/europa.jpg",     5,  1.742597f,  0.24329f,   0.009703f  },
-		{ "ganymede",  "assets/textures/moons/ganymede.jpg",   5,  2.779221f,  0.206498f,  0.292123f  },
-		{ "io",        "assets/textures/moons/io.jpg",         5,  0.680519f,  0.142936f,  0.004849f  },
-		{ "dione",     "assets/textures/moons/dione.jpg",      6,  0.98026f,   0.088134f,  0.006849f  },
-		{ "enceladus", "assets/textures/moons/enceladus.jpg",  6,  0.384179f,  0.024643f,  0.003753f  },
-		{ "iapetus",   "assets/textures/moons/iapetus.jpg",    6,  35.224156f, 0.115461f,  0.216438f  },
-		{ "mimas",     "assets/textures/moons/mimas.jpg",      6,  0.481919f,  0.010909f,  0.002581f  },
-		{ "rhea",      "assets/textures/moons/rhea.jpg",       6,  1.368935f,  0.119918f,  0.012329f  },
-		{ "tethys",    "assets/textures/moons/tethys.jpg",     6,  0.766234f,  0.04183f,   0.005171f  },
-		{ "titan",     "assets/textures/moons/titan.png",      6,  3.173688f,  0.404175f,  0.043607f  },
-		{ "ariel",     "assets/textures/moons/ariel.jpg",      7,  0.495844f,  0.0908f,    0.006545f  },
-		{ "miranda",   "assets/textures/moons/miranda.jpg",    7,  0.336078f,  0.036886f,  0.003836f  },
-		{ "oberon",    "assets/textures/moons/oberon.jpg",     7,  1.513247f,  0.1194f,    0.036886f  },
-		{ "titania",   "assets/textures/moons/titania.jpg",    7,  1.132234f,  0.1235f,    0.023836f  },
-		{ "umbriel",   "assets/textures/moons/umbriel.jpg",    7,  0.429151f,  0.091822f,  0.011342f  },
-		{ "triton",    "assets/textures/moons/triton.jpg",     8,  0.921452f,  0.2122f,   -0.016101f  },
-		{ "charon",    "assets/textures/moons/charon.jpg",     9,  0.045548f,  0.095f,     0.017479f  },
-	};
-
-	for(int i = 0; i < 11; i++)
-		planetInstanceArray[i].numMoons = 0;
-
-	moonNormalTexture = createNeutralNormalTexture();
-	finishLoadingStep();
-	moonDisplacementTexture = loadTexture("assets/textures/planets/moonDisplacement.png");
-	finishLoadingStep();
-
-	// defs are ordered by planet, so appending keeps each planet's moons
-	// contiguous in moonInstanceArray (drawMoon walks it sequentially)
-	for(int i = 0; i < MAX_MOONS; i++)
-	{
-		if(!fileExists(defs[i].path))
-		{
-			fprintf(stderr, "[trace] moonBuilder: skipped %s (no texture at %s)\n", defs[i].name, defs[i].path);
-			continue;
-		}
-		moonParameters m;
-		m.planet = defs[i].planet;
-		m.radius = defs[i].radius * moonRadMult;
-		m.size = defs[i].size * planetScaleMult;
-		m.orbit = defs[i].orbit;
-		m.texture = loadTexture(defs[i].path);
-		finishLoadingStep();
-		m.normal = moonNormalTexture;
-		moonInstanceArray[loadedMoonCount] = m;
-		planetInstanceArray[defs[i].planet].numMoons++;
-		loadedMoonCount++;
-	}
-	fprintf(stderr, "[trace] moonBuilder: %d/%d moons have textures\n", loadedMoonCount, MAX_MOONS);
-}
-
-// ---------------------------------------------------------------------------
-// Ring textures
-//
-// The old commit loaded assets/textures/planets/saturnRing.png, which was
-// never committed. Synthesize an equivalent radial band profile instead: a
-// 512x2 RGBA strip whose RGB is the ring colour and whose A is the
-// per-radius brightness. u = 0 is the inner ring edge, u = 1 the outer one.
-// ---------------------------------------------------------------------------
-
-#define RING_TEX_WIDTH 512
-
-static float ringGaussian(float u, float c, float w)
-{
-	float d = (u - c)/w;
-	return expf(-0.5f*d*d);
-}
-
-// Saturn: D (faint inner), C, bright B, dark Cassini division, A, thin F
-static float saturnRingLuma(float u)
-{
-	float l;
-	if(u < 0.03f)      l = 0.10f;
-	else if(u < 0.20f) l = 0.28f;
-	else if(u < 0.58f) l = 0.85f;
-	else if(u < 0.66f) l = 0.14f;
-	else               l = 0.55f;
-
-	if(u > 0.895f && u < 0.915f)
-		l *= 0.25f;
-	if(u >= 0.985f)
-		l = 0.35f;
-
-	l *= 0.93f + 0.07f*sinf(u*300.0f + 1.7f)*sinf(u*77.0f);
-	return l;
-}
-
-// Uranus: very faint narrow rings, brightest = epsilon ring near u ~ 0.9
-static float uranusRingLuma(float u)
-{
-	float l = 0.03f;
-	l += 0.10f*ringGaussian(u, 0.30f, 0.015f);
-	l += 0.14f*ringGaussian(u, 0.45f, 0.020f);
-	l += 0.12f*ringGaussian(u, 0.62f, 0.012f);
-	l += 0.55f*ringGaussian(u, 0.90f, 0.012f);
-	if(l > 1.0f)
-		l = 1.0f;
-	return l;
-}
-
-static GLuint uploadRingTexture(float baseR, float baseG, float baseB, float (*luma)(float))
-{
-	unsigned char pixels[RING_TEX_WIDTH*2*4];
-
-	for(int x = 0; x < RING_TEX_WIDTH; x++)
-	{
-		float l = luma((float)x/(float)(RING_TEX_WIDTH - 1));
-		for(int y = 0; y < 2; y++)
-		{
-			unsigned char *px = &pixels[(x*2 + y)*4];
-			px[0] = (unsigned char)(baseR*255.0f);
-			px[1] = (unsigned char)(baseG*255.0f);
-			px[2] = (unsigned char)(baseB*255.0f);
-			px[3] = (unsigned char)(l*255.0f);
-		}
-	}
-
-	GLuint textureID;
-	glGenTextures(1, &textureID);
-	glBindTexture(GL_TEXTURE_2D, textureID);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, RING_TEX_WIDTH, 2, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glBindTexture(GL_TEXTURE_2D, 0);
-	return textureID;
-}
-
-// planetInstanceArray order from planetBuilder(): 6 = saturn, 7 = uranus
-static GLuint generateRingTexture(int planetIndex)
-{
-	if(planetIndex == 6)
-		return uploadRingTexture(0.93f, 0.85f, 0.70f, saturnRingLuma);
-	return uploadRingTexture(0.65f, 0.75f, 0.88f, uranusRingLuma);
-}
-
-vec3 *generateTangents(int vertexNumber, vec3 *points, vec3 *tangent)
-{
-	vec3 axis = {0.0, 0.0, 1.0};
-	vec3 t;
-
-	// The fragment shader samples the texture with the equirectangular
-	// mapping u = atan2(y, x), v = asin(z), so the tangent is the
-	// direction of increasing u: cross(axis, point) = (-y, x, 0).
-	for(int i = 0; i < vertexNumber; i++)
-	{
-		t = crossvec3(axis, points[i]);
-		if(t.x*t.x + t.y*t.y + t.z*t.z < 1e-8f)
-		{
-			// Exactly on a pole where the mapping degenerates.
-			t.x = 1.0; t.y = 0.0; t.z = 0.0;
-		}
-		tangent[i] = normalizevec3(t);
-	}
-	return tangent;
-}
-
-vec3 *generateSmoothNormals(int vertexNumber, vec3 *vna, vec3 *pointArray, vec3 *normalArray)
-{
-	vec3 vn;
-
-	for(int i = 0; i < vertexNumber; i++)
-	{
-		vec3 tempvn = {0.0, 0.0, 0.0};
-		vn = pointArray[i];
-		for(int j = 0; j < vertexNumber; j++)
-		{
-			if(vn.x == pointArray[j].x && vn.y == pointArray[j].y && vn.z == pointArray[j].z)
-			{
-				tempvn = plusequalvec3(tempvn, normalArray[j]);
-			}
-		}
-		vna[i] = normalizevec3(tempvn);
-	}
-	return vna;
-}
-
-/*void *generateTexCoords()
-{
-	vec2 temp[vertexNumber];
-	for(int i = 0; i < vertexNumber; i++)
-	{
-		temp[i].x = atan2(points[i].y, points[i].x) / 3.1415926 + 1.0 * 0.5;
-        temp[i].y = asin(points[i].z) / 3.1415926 + 0.5;
-	}
-}
-*/
-
-void initObject() {
-	object = ObjLoadModel("assets/obj/torus.obj");
-
-	glGenVertexArrays(1, &objectVAO);
-	glBindVertexArray(objectVAO);
-	glGenBuffers(1, &objectVBO);
-	glBindBuffer(GL_ARRAY_BUFFER, objectVBO);
-	glBufferData(GL_ARRAY_BUFFER, object.size + object.nsize, NULL, GL_STATIC_DRAW);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, object.size, object.points);
-	glBufferSubData(GL_ARRAY_BUFFER, object.size, object.nsize, object.normals);
-	vPosition = glGetAttribLocation(sunShader, "vPosition");
-    glEnableVertexAttribArray(vPosition);
-    glVertexAttribPointer(vPosition, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(0));
-
-    vNormal = glGetAttribLocation(sunShader, "vNormal");
-    glEnableVertexAttribArray(vNormal);
-    glVertexAttribPointer(vNormal, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(object.size));
-	glBindVertexArray(0);
-}
-
-// Tiny LCG: belts want a randomized-but-reproducible layout, and this keeps
-// the app's global rand() stream untouched.
-static unsigned int beltSeed = 0x5EEDB71u;
-static float beltRand()
-{
-	beltSeed = beltSeed * 1664525u + 1013904223u;
-	return (float)(beltSeed >> 8) / (float)(1u << 24);
-}
-
-void initBelt(belt *b, char *path, int count,
-	float rMin, float rMax, float maxHeight, float sMin, float sMax)
-{
-	b->meshPath = path;
-	b->count = count;
-	b->mesh = ObjLoadModel(path);
-
-	beltRockData *data = malloc(sizeof(beltRockData) * count);
-	for(int i = 0; i < count; i++)
-	{
-		// Orbit radius: uniform across the belt's annulus.
-		data[i].orbitRadius = rMin + beltRand() * (rMax - rMin);
-		// Small random height above/below the ecliptic.
-		data[i].height = (beltRand() * 2.0f - 1.0f) * maxHeight;
-		// Angular speed in rad per simulated day. The old per-60-Hz-step value
-		// (0.002f/orbitRadius, i.e. 0.001f/period with period == radius/AU)
-		// times OLD_TICKS_PER_DAY steps/day, with +/-15% jitter so the belt
-		// doesn't rotate as one solid ring. The belt shader advances
-		// angle = aOrbit.w + uTime * aOrbit.z with uTime now in days.
-		data[i].angSpeed = 0.002f / data[i].orbitRadius * (0.85f + 0.30f * beltRand())
-			* OLD_TICKS_PER_DAY;
-		data[i].phase = beltRand() * 6.2831853f;
-		data[i].scale = sMin + beltRand() * (sMax - sMin);
-		// Self-spin, rad per simulated day (old per-frame step x steps/day).
-		data[i].spinSpeed = (0.5f + beltRand()) * 0.01f * OLD_TICKS_PER_DAY;
-		if(beltRand() < 0.5f)
-			data[i].spinSpeed = -data[i].spinSpeed;
-		data[i].spinPhase = beltRand() * 6.2831853f;
-		data[i].tilt = (beltRand() * 2.0f - 1.0f) * 0.5f;
-	}
-
-	glGenVertexArrays(1, &b->vao);
-	glBindVertexArray(b->vao);
-
-	// Mesh stream: positions then normals (same layout as initObject). The
-	// loader emits flat per-face normals (one per vertex of each triangle);
-	// weld them to smooth per-vertex normals exactly like planet rendering
-	// so the rocks shade smoothly instead of as a stack of facets.
-	vec3 *smooth = malloc(sizeof(vec3) * b->mesh.vertexNumber);
-	generateSmoothNormals(b->mesh.vertexNumber, smooth, b->mesh.points, b->mesh.normals);
-
-	glGenBuffers(1, &b->vbo);
-	glBindBuffer(GL_ARRAY_BUFFER, b->vbo);
-	glBufferData(GL_ARRAY_BUFFER, b->mesh.size + b->mesh.nsize, NULL, GL_STATIC_DRAW);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, b->mesh.size, b->mesh.points);
-	glBufferSubData(GL_ARRAY_BUFFER, b->mesh.size, b->mesh.nsize, smooth);
-	free(smooth);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(0));
-	glEnableVertexAttribArray(1);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(b->mesh.size));
-
-	// Instance stream: one beltRockData per rock, advanced per-instance.
-	glGenBuffers(1, &b->ibo);
-	glBindBuffer(GL_ARRAY_BUFFER, b->ibo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(beltRockData) * count, data, GL_STATIC_DRAW);
-	glEnableVertexAttribArray(2);
-	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(beltRockData), BUFFER_OFFSET(0));
-	glVertexAttribDivisor(2, 1);
-	glEnableVertexAttribArray(3);
-	glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(beltRockData), BUFFER_OFFSET(4*sizeof(GLfloat)));
-	glVertexAttribDivisor(3, 1);
-
-	glBindVertexArray(0);
-	free(data);
-}
-
-void initBelts()
-{
-	createShader(&beltShader, "src/shaders/belt.vert",
-		"src/shaders/belt.frag");
-
-	beltSeed = 0x5EEDB71u;
-
-	// Main asteroid belt: between drawn Mars (1.88 * 2000 = 3760) and
-	// Jupiter (11.86 * 2000 = 23724).
-	initBelt(&asteroidBelt, "assets/obj/asteroid.obj", 1500,
-		4200.0f, 6800.0f, 120.0f, 6.0f, 30.0f);
-	// Kuiper belt: past drawn Jupiter, kept inside the view frustum
-	// (zFar = 100000, camera distance max 25000) — the specced "past
-	// Neptune" range (Neptune draws at 329600) is beyond the far plane
-	// and can never be seen.
-	initBelt(&kuiperBelt, "assets/obj/rock.obj", 1000,
-		35000.0f, 95000.0f, 1200.0f, 15.0f, 80.0f);
-}
-
-void initComets()
-{
-	createShader(&cometShader, "src/shaders/comet.vert",
-		"src/shaders/comet.frag");
-	createShader(&tailShader, "src/shaders/tail.vert",
-		"src/shaders/tail.frag");
-
-	// Per-comet seeds. q (perihelion distance) sets how close each one dips to
-	// the sun; rA (aphelion distance) sets how far out the ellipse arcs before
-	// looping back. dir aims each perihelion into the camera-facing hemisphere
-	// (world +z, ahead of the default camera at +5000) so the bright near-sun
-	// pass happens in FRONT of the sun rather than behind it, from a different
-	// side each time. phase is the starting point along the orbit (a fraction
-	// of PI, i.e. a fraction of the half orbit) so the three arrive at
-	// different intervals, and kMult sets each orbit's tempo so they never
-	// re-sync into a lockstep pass.
-	// Perihelion distance q: kept close to the sun (glow is 3000) so the pass
-	// visibly dives into the sun. Each perihelion keeps z>0 (in front of the
-	// sun, between it and the default camera at z=5000) so it is seen crossing
-	// the sun's face rather than hidden behind it.
-	static const float seedQ[]  = { 1500.0f, 2600.0f, 3400.0f };
-	// Aphelion distance rA: arcs far out into the system (the Kuiper belt
-	// draws at 35000..95000 and the far plane is 100000), then returns on the
-	// closed ellipse. Larger rA = more eccentric, longer hidden far stretch.
-	static const float seedRA[] = { 46000.0f, 38000.0f, 58000.0f };
-	// Perihelion world angle. z = q*sin(dir) stays in (0, 5000):
-	//   #0 right  (1336, 705)   #1 left   (-2256, 1756)   #2 right (3205, 1166)
-	static const float seedDir[]   = {   0.5f,   2.4f,     0.35f  };
-	static const float seedPhase[] = {  0.80f,  0.30f,  -0.45f };
-	static const float seedKMult[] = {  1.00f,  1.35f,  0.75f };
-
-	for(int ci = 0; ci < COMET_COUNT; ci++)
-	{
-	comet *c = &comets[ci];
-	c->mesh = ObjLoadModel("assets/obj/rock.obj");
-	c->particleCount = COMET_PARTICLES;
-
-	// Ellipse geometry, sun at the focus: e = (rA - q)/(rA + q), p = q(1+e).
-	// r(theta) = p / (1 + e cos(theta)); theta spans the full -PI..+PI, with
-	// perihelion at 0 and aphelion at +/-PI.
-	c->q = seedQ[ci];
-	c->e = (seedRA[ci] - seedQ[ci]) / (seedRA[ci] + seedQ[ci]);
-	c->p = seedQ[ci] * (1.0f + c->e);
-	c->dir = seedDir[ci];
-	c->theta = seedPhase[ci] * 3.14159265358979f; // stagger the three comets
-	// Speed in rad per simulated day: the old per-60-Hz-step constant
-	// multiplied by OLD_TICKS_PER_DAY steps/day (see updateComet).
-	c->orbitK = COMET_ORBIT_K * seedKMult[ci] * OLD_TICKS_PER_DAY;
-	c->spin = beltRand() * 6.2832f;
-
-	// Nucleus VAO: positions then normals (same layout as initBelt).
-	glGenVertexArrays(1, &c->vao);
-	glBindVertexArray(c->vao);
-	// Weld the loader's flat per-face normals into smooth per-vertex normals
-	// before upload (same path as the belt and planet meshes).
-	vec3 *nuc = malloc(sizeof(vec3) * c->mesh.vertexNumber);
-	generateSmoothNormals(c->mesh.vertexNumber, nuc, c->mesh.points, c->mesh.normals);
-
-	glGenBuffers(1, &c->vbo);
-	glBindBuffer(GL_ARRAY_BUFFER, c->vbo);
-	glBufferData(GL_ARRAY_BUFFER, c->mesh.size + c->mesh.nsize, NULL, GL_STATIC_DRAW);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, c->mesh.size, c->mesh.points);
-	glBufferSubData(GL_ARRAY_BUFFER, c->mesh.size, c->mesh.nsize, nuc);
-	free(nuc);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(0));
-	glEnableVertexAttribArray(1);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(c->mesh.size));
-
-	// Tail: a shared billboard quad (two triangles, corners in -0.5..0.5)
-	// instanced once per particle.
-	static const float quad[] = {
-		-0.5f, -0.5f,   0.5f, -0.5f,   0.5f, 0.5f,
-		-0.5f, -0.5f,   0.5f,  0.5f,  -0.5f, 0.5f
-	};
-	glGenVertexArrays(1, &c->tailVao);
-	glBindVertexArray(c->tailVao);
-	glGenBuffers(1, &c->quadVbo);
-	glBindBuffer(GL_ARRAY_BUFFER, c->quadVbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2*sizeof(GLfloat), BUFFER_OFFSET(0));
-
-	// Per-particle instance data: aFracJit (frac, jx, jy) + aSizeAlpha.
-	int n = c->particleCount;
-	float *inst = malloc(sizeof(float) * 5 * n);
-	for(int i = 0; i < n; i++)
-	{
-		float frac = (float)i / (float)(n - 1);
-		// Sprites are large and dense near the head (the coma) and thin out
-		// toward the tip; alpha falls off the same way (see tail.vert).
-		float size = (24.0f + 150.0f * (1.0f - frac)) * (0.7f + 0.6f * beltRand());
-		inst[5*i + 0] = frac;
-		inst[5*i + 1] = beltRand() * 2.0f - 1.0f;
-		inst[5*i + 2] = beltRand() * 2.0f - 1.0f;
-		inst[5*i + 3] = size;
-		inst[5*i + 4] = 0.5f + 0.5f * beltRand();
-	}
-	glGenBuffers(1, &c->tailVbo);
-	glBindBuffer(GL_ARRAY_BUFFER, c->tailVbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 5 * n, inst, GL_STATIC_DRAW);
-	free(inst);
-	glEnableVertexAttribArray(1);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5*sizeof(GLfloat), BUFFER_OFFSET(0));
-	glVertexAttribDivisor(1, 1);
-	glEnableVertexAttribArray(2);
-	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 5*sizeof(GLfloat), BUFFER_OFFSET(3*sizeof(GLfloat)));
-	glVertexAttribDivisor(2, 1);
-
-	glBindVertexArray(0);
-	// Seed the derived pose (r, pos, tail) at the chosen anomaly without
-	// advancing: dDays=0 keeps theta exactly at seedPhase.
-	updateComet(c, 0.0f);
-	}
-}
-
-void updateComet(comet *c, float dDays)
-{
-	// Ellipse, sun at the focus (origin): r = p / (1 + e cos theta), with
-	// perihelion at theta = 0 and aphelion at theta = +/-PI. Advance theta by
-	// (K / r^2) * dDays, where K (c->orbitK) is in rad per simulated day:
-	// equal-area-in-equal-time, so it whips around perihelion and crawls far
-	// out, like a real comet, at a pace tied to the sim clock. dDays is the
-	// sim-days stepped this frame (updateBodies), so a pause steps it by 0.
-	// The whole conic is rotated by c->dir so perihelion points along a chosen
-	// world direction (kept near the default camera's line of sight).
-	float ang = c->theta + c->dir;
-	float r = c->p / (1.0f + c->e * cosf(c->theta));
-	float dTheta = c->orbitK / (r * r);
-	c->theta -= dTheta * dDays;
-	if(c->theta < -3.14159265358979f)
-		c->theta += 6.28318530717959f; // wrap at aphelion: same point, no visible reset
-	c->spin += 0.005f * OLD_TICKS_PER_DAY * dDays;
-
-	ang = c->theta + c->dir;
-	r = c->p / (1.0f + c->e * cosf(c->theta));
-	c->r = r;
-	c->pos.x = r * cosf(ang);
-	c->pos.y = 0.0f;
-	c->pos.z = r * sinf(ang);
-
-	// Tail: anti-sunward (the sun is at the origin), length and brightness
-	// both proportional to 1/r^2, peaking at perihelion.
-	c->tailDir.x = c->pos.x / r;
-	c->tailDir.y = c->pos.y / r;
-	c->tailDir.z = c->pos.z / r;
-	float q = c->q;
-	float falloff = (q / r) * (q / r);
-	c->tailLen = COMET_TAIL_MAX * falloff;
-	c->tailWidth = 0.18f * c->tailLen;
-	c->tailAlpha = falloff;
-
-	// Distance-based visibility (like a real comet): fully bright at the
-	// perihelion distance q, smoothly faded to 0 beyond COMET_VIS_FAR * q.
-	// The slow far-out crawl happens while invisible, so only the fast,
-	// bright close pass is seen.
-	float rFar = COMET_VIS_FAR * q;
-	float t = (rFar - r) / (rFar - q);
-	t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
-	c->vis = t * t * (3.0f - 2.0f * t);
-}
-
-void drawComets()
-{
-	for(int ci = 0; ci < COMET_COUNT; ci++)
-	{
-	comet *c = &comets[ci];
-	if(c->vis < 0.02f)
-		continue;   // faded out on the far arc; skipped so the distant crawl is never drawn
-
-	// Nucleus: alpha-faded by the pass-end window (uFade), writes depth.
-	glUseProgram(cometShader);
-	glUniform1f(glGetUniformLocation(cometShader, "uFade"), c->vis);
-	mat4 m = multiplymat4(multiplymat4(translatevec3(c->pos), rotateY(c->spin)),
-		scale(COMET_NUCLEUS_SCALE));
-	initMVP(cometShader, m, v);
-	glBindVertexArray(c->vao);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glDrawArrays(GL_TRIANGLES, 0, c->mesh.vertexNumber);
-	glDisable(GL_BLEND);
-	glBindVertexArray(0);
-
-	// Tail: additive camera-facing sprites; depth-tested so a closer planet
-	// hides it, but no depth write so the sky behind stays visible.
-	glUseProgram(tailShader);
-	{
-		float r = c->r > 0.0f ? c->r : 1.0f;
-		float falloff = (c->q / r) * (c->q / r);
-		glUniformMatrix4fv(glGetUniformLocation(tailShader, "projection"), 1, GL_FALSE, &p.m[0][0]);
-		glUniformMatrix4fv(glGetUniformLocation(tailShader, "view"), 1, GL_FALSE, &v.m[0][0]);
-		glUniform3f(glGetUniformLocation(tailShader, "uNucleus"), c->pos.x, c->pos.y, c->pos.z);
-		glUniform3f(glGetUniformLocation(tailShader, "uTailDir"),
-			c->pos.x / r, c->pos.y / r, c->pos.z / r);
-		glUniform1f(glGetUniformLocation(tailShader, "uTailLen"), COMET_TAIL_MAX * falloff);
-		glUniform1f(glGetUniformLocation(tailShader, "uTailWidth"), 0.18f * COMET_TAIL_MAX * falloff);
-		glUniform1f(glGetUniformLocation(tailShader, "uTailAlpha"), falloff * c->vis);
-		glUniform3f(glGetUniformLocation(tailShader, "uColor"), 0.55f, 0.75f, 1.0f);
-
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-		glDisable(GL_CULL_FACE);
-		glDepthMask(GL_FALSE);
-
-		glBindVertexArray(c->tailVao);
-		glDrawArraysInstanced(GL_TRIANGLES, 0, 6, c->particleCount);
-		glBindVertexArray(0);
-
-		glDepthMask(GL_TRUE);
-		glEnable(GL_CULL_FACE);
-		glDisable(GL_BLEND);
-	}
-	}
-}
-
-void initPlanet() {
-	createShader(&planetShader, "src/shaders/planet.vert",
-		"src/shaders/planet.frag");
-
-	vec3 *tangent = malloc(sizeof(vec3) * planet.vertexNumber);
-	generateTangents(planet.vertexNumber, planet.points, tangent);
-	vec3 *vna = malloc(sizeof(vec3) * planet.vertexNumber);
-	generateSmoothNormals(planet.vertexNumber, vna, planet.points, planet.normals);
-
-	glGenVertexArrays(1, &planetVAO);
-	glBindVertexArray(planetVAO);
-	glGenBuffers(1, &planetVBO);
-	glBindBuffer(GL_ARRAY_BUFFER, planetVBO);
-	glBufferData(GL_ARRAY_BUFFER, planet.size + planet.nsize + sizeof(vec3) * planet.vertexNumber, NULL, GL_STATIC_DRAW);
-	glBufferSubData(GL_ARRAY_BUFFER, 0,	planet.size, planet.points);
-	glBufferSubData(GL_ARRAY_BUFFER, planet.size, planet.nsize, vna);
-	glBufferSubData(GL_ARRAY_BUFFER, planet.size+planet.nsize, sizeof(vec3) * planet.vertexNumber,	tangent);
-
-	vPosition = glGetAttribLocation(planetShader, "vPosition");
-    glEnableVertexAttribArray(vPosition);
-    glVertexAttribPointer(vPosition, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(0));
-
-    vNormal = glGetAttribLocation(planetShader, "vNormal");
-    glEnableVertexAttribArray(vNormal);
-    glVertexAttribPointer(vNormal, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(planet.size));
-
-    vTangent = glGetAttribLocation(planetShader, "vTangent");
-    glEnableVertexAttribArray(vTangent);
-    glVertexAttribPointer(vTangent, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(planet.size+planet.nsize));
-
-	glBindVertexArray(0);
-
-	free(tangent);
-	free(vna);
-}
-
-void initPlanetRing()
-{
-	createShader(&ringShader, "src/shaders/ring.vert",
-		"src/shaders/ring.frag");
-
-	for(int i = 0; i < 11; i++)
-	{
-		if(!planetInstanceArray[i].createRing)
-			continue;
-
-		planetInstanceArray[i].ringTex = generateRingTexture(i);
-		ringArray[i] = createRing(128, planetInstanceArray[i].ringInner, planetInstanceArray[i].ringOuter);
-
-		glGenVertexArrays(1, &ringVAO[i]);
-		glBindVertexArray(ringVAO[i]);
-		glGenBuffers(1, &ringVBO[i]);
-		glBindBuffer(GL_ARRAY_BUFFER, ringVBO[i]);
-		glBufferData(GL_ARRAY_BUFFER, ringArray[i].size + ringArray[i].nsize + ringArray[i].texsize, NULL, GL_STATIC_DRAW);
-		glBufferSubData(GL_ARRAY_BUFFER, 0, ringArray[i].size, ringArray[i].points);
-		glBufferSubData(GL_ARRAY_BUFFER, ringArray[i].size, ringArray[i].nsize, ringArray[i].normals);
-		glBufferSubData(GL_ARRAY_BUFFER, ringArray[i].size + ringArray[i].nsize, ringArray[i].texsize, ringArray[i].texCoords);
-
-		GLint aPosition = glGetAttribLocation(ringShader, "vPosition");
-		glEnableVertexAttribArray(aPosition);
-		glVertexAttribPointer(aPosition, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(0));
-
-		GLint aNormal = glGetAttribLocation(ringShader, "vNormal");
-		glEnableVertexAttribArray(aNormal);
-		glVertexAttribPointer(aNormal, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(ringArray[i].size));
-
-		GLint aTexture = glGetAttribLocation(ringShader, "vTexture");
-		glEnableVertexAttribArray(aTexture);
-		glVertexAttribPointer(aTexture, 2, GL_FLOAT, GL_FALSE, 2*sizeof(GLfloat), BUFFER_OFFSET(ringArray[i].size + ringArray[i].nsize));
-		glBindVertexArray(0);
-	}
-}
-
-void initAtmosphere() {
-	createShader(&atmosphereShader, "src/shaders/atmosphere.vert",
-		"src/shaders/atmosphere.frag");
-
-    glGenVertexArrays(1, &atmosphereVAO);
-	glBindVertexArray(atmosphereVAO);
-	glGenBuffers(1, &atmosphereVBO);
-	glBindBuffer(GL_ARRAY_BUFFER, atmosphereVBO);
-	glBufferData(GL_ARRAY_BUFFER, planet.size + planet.nsize, NULL, GL_STATIC_DRAW);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, planet.size, planet.points);
-	glBufferSubData(GL_ARRAY_BUFFER, planet.size, planet.nsize, planet.normals);
-	vPosition = glGetAttribLocation(atmosphereShader, "vPosition");
-    glEnableVertexAttribArray(vPosition);
-    glVertexAttribPointer(vPosition, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(0));
-
-    vNormal = glGetAttribLocation(atmosphereShader, "vNormal");
-    glEnableVertexAttribArray(vNormal);
-    glVertexAttribPointer(vNormal, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), BUFFER_OFFSET(planet.size));
-	glBindVertexArray(0);
-}
-
-void initOrbits()
-{
-	createShader(&orbitShader, "src/shaders/orbit.vert",
-		"src/shaders/orbit.frag");
-
-	// Unit circle in the XZ plane (the plane every planet orbits in). All
-	// planets share it; drawOrbits scales it to each planet's orbit radius.
-	GLfloat verts[ORBIT_SEGMENTS*3];
-	for(int i = 0; i < ORBIT_SEGMENTS; i++)
-	{
-		float a = 2.0f*3.14159265358979f*(float)i/(float)ORBIT_SEGMENTS;
-		verts[i*3+0] = cosf(a);
-		verts[i*3+1] = 0.0f;
-		verts[i*3+2] = sinf(a);
-	}
-
-	glGenVertexArrays(1, &orbitVAO);
-	glBindVertexArray(orbitVAO);
-	glGenBuffers(1, &orbitVBO);
-	glBindBuffer(GL_ARRAY_BUFFER, orbitVBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
-
-	GLint aPosition = glGetAttribLocation(orbitShader, "vPosition");
-	glEnableVertexAttribArray(aPosition);
-	glVertexAttribPointer(aPosition, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), (GLvoid*)0);
-	glBindVertexArray(0);
-}
-
-void initSkybox() {
-	GLfloat skyboxVertices[] = {
-        // Positions
-        -1.0f, 1.0f, -1.0f,
-        -1.0f, -1.0f, -1.0f,
-        1.0f, -1.0f, -1.0f,
-        1.0f, -1.0f, -1.0f,
-        1.0f, 1.0f, -1.0f,
-        -1.0f, 1.0f, -1.0f,
-
-        -1.0f, -1.0f, 1.0f,
-        -1.0f, -1.0f, -1.0f,
-        -1.0f, 1.0f, -1.0f,
-        -1.0f, 1.0f, -1.0f,
-        -1.0f, 1.0f, 1.0f,
-        -1.0f, -1.0f, 1.0f,
-
-        1.0f, -1.0f, -1.0f,
-        1.0f, -1.0f, 1.0f,
-        1.0f, 1.0f, 1.0f,
-        1.0f, 1.0f, 1.0f,
-        1.0f, 1.0f, -1.0f,
-        1.0f, -1.0f, -1.0f,
-
-        -1.0f, -1.0f, 1.0f,
-        -1.0f, 1.0f, 1.0f,
-        1.0f, 1.0f, 1.0f,
-        1.0f, 1.0f, 1.0f,
-        1.0f, -1.0f, 1.0f,
-        -1.0f, -1.0f, 1.0f,
-
-        -1.0f, 1.0f, -1.0f,
-        1.0f, 1.0f, -1.0f,
-        1.0f, 1.0f, 1.0f,
-        1.0f, 1.0f, 1.0f,
-        -1.0f, 1.0f, 1.0f,
-        -1.0f, 1.0f, -1.0f,
-
-        -1.0f, -1.0f, -1.0f,
-        -1.0f, -1.0f, 1.0f,
-        1.0f, -1.0f, -1.0f,
-        1.0f, -1.0f, -1.0f,
-        -1.0f, -1.0f, 1.0f,
-        1.0f, -1.0f, 1.0f
-    };
-
-    createShader(&skyboxShader, "src/shaders/skybox.vert",
-		"src/shaders/skybox.frag");
-
-	glGenVertexArrays(1, &skyboxVAO);
-	glBindVertexArray(skyboxVAO);
-    glGenBuffers(1, &skyboxVBO);
-    glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), skyboxVertices, GL_STATIC_DRAW);
-    vPosition = glGetAttribLocation(skyboxShader, "vPosition");
-    glEnableVertexAttribArray(vPosition);
-    glVertexAttribPointer(vPosition, 3, GL_FLOAT , GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
-    glBindVertexArray(0);
-}
-
-void initFramebuffer() {
-	int shadowWidth = 1024;
-	int shadowHeight = 1024;
-	glGenFramebuffers(1, &shadowFBO);
-    glGenTextures(1, &depthMap);
-    glBindTexture(GL_TEXTURE_2D, depthMap);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, shadowWidth, shadowHeight, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
-    glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMap, 0);
-    glDrawBuffer(GL_NONE);
-    glReadBuffer(GL_NONE);
-    //glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-        printf("Framebuffer not complete!\n");
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-}
-
-void initSunQuad()
-{
-	GLfloat quadVertices[] = {
-		-1.0f, -1.0f, 0.0f,
-		 1.0f, -1.0f, 0.0f,
-		 1.0f,  1.0f, 0.0f,
-		-1.0f,  1.0f, 0.0f
-	};
-
-	glGenVertexArrays(1, &sunQuadVAO);
-	glBindVertexArray(sunQuadVAO);
-	glGenBuffers(1, &sunQuadVBO);
-	glBindBuffer(GL_ARRAY_BUFFER, sunQuadVBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
-
-	GLint vPositionLoc = glGetAttribLocation(sunShader, "vPosition");
-	glEnableVertexAttribArray(vPositionLoc);
-	glVertexAttribPointer(vPositionLoc, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
-	glBindVertexArray(0);
+	double d = SimTime_Days();
+	Bodies_Update(d);
+	Belt_SetSimTime((float)d);
+	Comet_UpdateAll(dDays);
 }
 
 // ---------------------------------------------------------------------------
@@ -1375,90 +113,24 @@ void initSunQuad()
 // responsive (Esc works) during loading.
 // ---------------------------------------------------------------------------
 
-void initLoadingScreen()
-{
-	createShader(&loadingShader, "src/shaders/loading.vert",
-		"src/shaders/loading.frag");
-
-	GLfloat quadVertices[] = {
-		-1.0f, -1.0f, 0.0f,
-		1.0f, -1.0f, 0.0f,
-		1.0f,  1.0f, 0.0f,
-		-1.0f,  1.0f, 0.0f
-	};
-
-	glGenVertexArrays(1, &loadingVAO);
-	glBindVertexArray(loadingVAO);
-	glGenBuffers(1, &loadingVBO);
-	glBindBuffer(GL_ARRAY_BUFFER, loadingVBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
-
-	GLint vPositionLoc = glGetAttribLocation(loadingShader, "vPosition");
-	glEnableVertexAttribArray(vPositionLoc);
-	glVertexAttribPointer(vPositionLoc, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
-	glBindVertexArray(0);
-}
-
-void renderLoadingScreen(float progress)
-{
-	glfwPollEvents();
-
-	int fbw, fbh;
-	glfwGetFramebufferSize(loadWindow, &fbw, &fbh);
-	glViewport(0, 0, fbw, fbh);
-
-	glDisable(GL_DEPTH_TEST);
-	glClearColor(0.02f, 0.02f, 0.05f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
-
-	glUseProgram(loadingShader);
-	glUniform1f(glGetUniformLocation(loadingShader, "uProgress"), progress);
-	glUniform1f(glGetUniformLocation(loadingShader, "uTime"), (float)glfwGetTime());
-	glBindVertexArray(loadingVAO);
-	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-	glBindVertexArray(0);
-	glEnable(GL_DEPTH_TEST);
-
-	glfwSwapBuffers(loadWindow);
-}
-
-// One loading step: repaint the bar at the current fraction done. Call once
-// per discrete unit of work (each texture decode, each init phase).
-void finishLoadingStep()
-{
-	float pct = (float)loadStepDone / (float)LOAD_TOTAL_STEPS;
-	loadStepDone++;
-	if (pct > 1.0f)
-		pct = 1.0f;
-	renderLoadingScreen(pct);
-}
-
 void init()
 {
 	fprintf(stderr, "[trace] init: tetrahedron\n");
 	planet = tetrahedron(5);
-	//atmosphere = tetrahedron(5);
-	createShader(&sunShader, "src/shaders/sun.vert",
-		"src/shaders/sun.frag");
-	initSunQuad();
-	fprintf(stderr, "[trace] init: framebuffer\n");
-
-    initFramebuffer();
+	Sun_InitGL();
     fprintf(stderr, "[trace] init: initPlanet\n");
-    initPlanet();
+    Planet_InitGL(planet);
 	fprintf(stderr, "[trace] init: planetRing\n");
-	initPlanetRing();
+	Rings_InitGL();
 	fprintf(stderr, "[trace] init: skybox\n");
-	initSkybox();
-	fprintf(stderr, "[trace] init: object\n");
-	initObject();
+	Skybox_InitGL();
 	fprintf(stderr, "[trace] init: belts\n");
-	initBelts();
+	Belt_InitGL();
 	fprintf(stderr, "[trace] init: comets\n");
-	initComets();
+	Comet_InitGL();
 	fprintf(stderr, "[trace] init: atmosphere\n");
-	initAtmosphere();
-	initOrbits();
+	Atmosphere_InitGL(planet);
+	Orbits_InitGL();
 	fprintf(stderr, "[trace] init: done\n");
 
     glEnable(GL_DEPTH_TEST);
@@ -1467,354 +139,6 @@ void init()
 void createPerspectiveMatrix()
 {
 	p = perspective(45.0f, ASPECT, zNear, zFar);
-}
-
-void setupLighting(int program)
-{
-    vec4 light_ambient = {0.2f, 0.2f, 0.2f, 1.0f};
-    vec4 light_diffuse = {1.0f, 1.0f, 1.0f, 1.0f};
-    vec4 light_specular = {1.0f, 1.0f, 1.0f, 1.0f};
-
-    vec4 material_ambient = {0.2f, 0.2f, 1.0f, 1.0f};
-    vec4 material_diffuse = {0.8f, 0.8f, 0.8f, 1.0f};
-    vec4 material_specular = {0.5f, 0.5f, 0.5f, 1.0f};
-
-    vec4 light_position = {0.0f, 0.0f, 1.0f, 1.0f};
-    float material_shininess = 50.0f;
-
-    vec4 ambient_product = multiplyvec4(light_ambient, material_ambient);
-    vec4 diffuse_product = multiplyvec4(light_diffuse, material_diffuse);
-    vec4 specular_product = multiplyvec4(light_specular, material_specular);
-
-    glUniform4fv( glGetUniformLocation(program, "ambientProduct"), 1, (float*)(&ambient_product) );
-    glUniform4fv( glGetUniformLocation(program, "diffuseProduct"), 1, (float*)(&diffuse_product) );
-    glUniform4fv( glGetUniformLocation(program, "specularProduct"), 1, (float*)(&specular_product) );
-	glUniform4fv( glGetUniformLocation(program, "lightPos"), 1, (float*)(&light_position) );
-	glUniform1f ( glGetUniformLocation(program, "shininess"), material_shininess );
-}
-
-static int   mvpLastProg = -1, mvpLastFrame = -1;
-static GLint mvpLProj, mvpLModel, mvpLView;
-
-/* p/v are identical for every call in a frame; only m differs. Keying the
-   cache on (program, frame) uploads projection/view once per program per
-   frame. Never drop the frame key: a mid-frame program switch must
-   refetch, or the cached locations would belong to another program. */
-void initMVP(int shader, mat4 m, mat4 v)
-{
-	if (shader != mvpLastProg || gFrame != mvpLastFrame)
-	{
-		mvpLProj   = glGetUniformLocation( shader, "projection" );
-		mvpLView   = glGetUniformLocation( shader, "view" );
-		mvpLModel  = glGetUniformLocation( shader, "model" );
-		glUniformMatrix4fv(mvpLProj, 1, GL_FALSE, &p.m[0][0]);
-		glUniformMatrix4fv(mvpLView, 1, GL_FALSE, &v.m[0][0]);
-		mvpLastProg  = shader;
-		mvpLastFrame = gFrame;
-	}
-	glUniformMatrix4fv( mvpLModel, 1, GL_FALSE, &m.m[0][0] );
-}
-
-void drawSkybox(skyboxTexture)
-{
-	glUseProgram(skyboxShader);
-
-	glDepthMask(GL_FALSE);
-	glDepthFunc(GL_LEQUAL);
-
-    mat4 mv = getViewRotation();
-
-	glUniformMatrix4fv(glGetUniformLocation( skyboxShader, "projection" ), 1, GL_TRUE, &p.m[0][0]);
-    glUniformMatrix4fv(glGetUniformLocation( skyboxShader, "ModelView" ), 1, GL_TRUE, &mv.m[0][0] );
-
-    glBindVertexArray (skyboxVAO);
-    glActiveTexture(GL_TEXTURE0);
-    glUniform1i(glGetUniformLocation(skyboxShader, "skybox"), 0);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, skyboxTexture);
-    glDrawArrays(GL_TRIANGLES, 0, 36);
-    glBindVertexArray(0);
-
-    glDepthMask(GL_TRUE);
-}
-
-void drawBelts()
-{
-	glUseProgram(beltShader);
-	glUniformMatrix4fv(glGetUniformLocation(beltShader, "projection"), 1, GL_FALSE, &p.m[0][0]);
-	glUniformMatrix4fv(glGetUniformLocation(beltShader, "view"), 1, GL_FALSE, &v.m[0][0]);
-	glUniform1f(glGetUniformLocation(beltShader, "uTime"), beltTime);
-
-	belt *belts[2] = { &asteroidBelt, &kuiperBelt };
-	for(int i = 0; i < 2; i++)
-	{
-		glBindVertexArray(belts[i]->vao);
-		glDrawArraysInstanced(GL_TRIANGLES, 0, belts[i]->mesh.vertexNumber, belts[i]->count);
-		glBindVertexArray(0);
-	}
-}
-
-void bindTexture(GLuint activeTex, GLuint tex) {
-    glActiveTexture(activeTex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-}
-
-// Shared uniforms for both sun passes (same billboard, same projected centre
-// and half-size). uDisc picks the fragment-shader mode: 1 = opaque disc,
-// 0 = additive corona halo.
-static void setupSunUniforms(GLfloat uDisc)
-{
-	glUniformMatrix4fv(glGetUniformLocation( sunShader, "projection" ), 1, GL_FALSE, &p.m[0][0]);
-	glUniformMatrix4fv(glGetUniformLocation( sunShader, "view" ), 1, GL_FALSE, &v.m[0][0]);
-	glUniform1f(glGetUniformLocation(sunShader, "sunRadius"), SUN_GLOW_RADIUS);
-	glUniform1f(glGetUniformLocation(sunShader, "systemTime"), (float)glfwGetTime());
-
-	int viewport[4];
-	glGetIntegerv(GL_VIEWPORT, viewport);
-	glUniform1f(glGetUniformLocation(sunShader, "aspect"), (float)viewport[2] / (float)viewport[3]);
-
-	bindTexture(GL_TEXTURE0, sunTexture);
-	bindTexture(GL_TEXTURE1, sunNormal);
-	glUniform1i(glGetUniformLocation(sunShader, "tex"), 0);
-	glUniform1i(glGetUniformLocation(sunShader, "normalTex"), 1);
-	glUniform1f(glGetUniformLocation(sunShader, "uDisc"), uDisc);
-}
-
-// Fullscreen quad corners are in perimeter order (BL,BR,TR,TL). Draw as a fan,
-// which tiles that ordering into two non-overlapping CCW triangles; a strip in
-// perimeter order leaves the top-left sector uncovered.
-static void drawSunQuadPass(void)
-{
-	glBindVertexArray(sunQuadVAO);
-	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-	glBindVertexArray(0);
-}
-
-// Opaque sun sphere. Drawn BEFORE the planets, with depth writes on, so its
-// stored depth makes it occlude any planet that orbits behind it. A planet in
-// front is closer, so it still (correctly) draws over the disc.
-void drawSunDisc()
-{
-	glUseProgram(sunShader);
-	setupSunUniforms(1.0f);
-
-	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LESS);
-	glDepthMask(GL_TRUE);
-	glDisable(GL_BLEND);
-
-	drawSunQuadPass();
-}
-
-// Additive corona halo. Drawn LAST: depth-tested against the scene (so a
-// passing planet still hides it) but never writes depth, so planets behind the
-// halo stay visible and the glow simply blends over them.
-void drawSun()
-{
-	glUseProgram(sunShader);
-	setupSunUniforms(0.0f);
-
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_ONE, GL_ONE);
-	glDepthFunc(GL_LESS);
-	glDepthMask(GL_FALSE);
-
-	drawSunQuadPass();
-
-	glDepthMask(GL_TRUE);
-	glDisable(GL_BLEND);
-}
-
-void drawAtmosphere()
-{
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_ONE, GL_ONE);
-
-	glUseProgram(atmosphereShader);
-	//setupLighting(atmosphereShader);
-
-
-	for(int i = 0; i < 11; i++)
-    {
-     	if(planetInstanceArray[i].createAtmosphere) {
-			float scaleFactor = atmosphereArray[i].scaleFactor;
-			float fOuter = planetInstanceArray[i].size*scaleFactor;
-			float fInner = (planetInstanceArray[i].size);
-			if (fOuter <= fInner) {
-				// no real shell (e.g. atmosphere scale not set); skip
-				continue;
-			}
-			//translation.x = planetInstanceArray[2].radius * cos(orbitSpeedArray[2]);
-			//translation.y = 0.0;
-			//translation.z = planetInstanceArray[2].radius * sin(orbitSpeedArray[2]);
-
-			mat4 modelmat = planetTransform[i];
-			mat4 tv = transposemat4(multiplymat4(modelmat, getViewPosition()));
-			vec4 camMult = {-tv.m[3][0], -tv.m[3][1], -tv.m[3][2], -tv.m[3][3]};
-			vec4 camPosition = multiplymat4vec4(tv, camMult);
-
-			//mat4 m = multiplymat4(translatevec3(translation), scale());
-			mat4 m = multiplymat4(modelmat, scale(planetInstanceArray[i].size*scaleFactor));
-			// Per-body solar brightness + Rayleigh tint (set in atmosphereBuilder()).
-			// The white Mie term is summed on top, so C_R's RGB sets each limb's hue.
-			vec3 C_R = atmosphereArray[i].C_R;
-			float E = atmosphereArray[i].E;
-
-			glUniform1f(glGetUniformLocation(atmosphereShader, "fInnerRadius"), fInner);
-			glUniform1f(glGetUniformLocation(atmosphereShader, "fOuterRadius"), fOuter);
-			glUniform3f(glGetUniformLocation(atmosphereShader, "camPosition"), camPosition.x, camPosition.y, camPosition.z);
-			glUniform3f(glGetUniformLocation(atmosphereShader, "C_R"), C_R.x, C_R.y, C_R.z);
-			glUniform1f(glGetUniformLocation(atmosphereShader, "E"), E);
-			glUniform1f(glGetUniformLocation(atmosphereShader, "time"), (float)glfwGetTime());
-
-			initMVP(atmosphereShader, m, v);
-
-			glBindVertexArray (atmosphereVAO);
-			// The dome is an outward-facing sphere. When the camera is inside the
-			// outer atmosphere every visible dome triangle is a back face, so
-			// swap the cull face (the paper inverts the sky dome's front faces
-			// for the camera-in-atmosphere case). The sky is a pure additive
-			// pass and must not write depth, or its surface would hide the
-			// moon/objects beyond the shell behind it.
-			float camDistSq = camPosition.x*camPosition.x + camPosition.y*camPosition.y + camPosition.z*camPosition.z;
-			glDepthMask(GL_FALSE);
-			if (camDistSq < fOuter*fOuter) {
-				glCullFace(GL_FRONT);
-			}
-			glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber);
-			glCullFace(GL_BACK);
-			glDepthMask(GL_TRUE);
-			glBindVertexArray(0);
-		}
-    }
-    glDisable(GL_BLEND);
-}
-
-void drawPlanet()
-{
-	//drawAtmosphere(translation, planetInstanceArray[2].size, 1.025);
-
-	glUseProgram(planetShader);
-	setupLighting(planetShader);
-	for(int i = 0; i < 11; i++)
-	{
-		translation.x = planetInstanceArray[i].radius * (float)cos(orbitSpeedArray[i]);
-		translation.y = 0.0;
-		translation.z = planetInstanceArray[i].radius * (float)sin(orbitSpeedArray[i]);
-		mat4 matT = multiplymat4(translatevec3(translation), scale(planetInstanceArray[i].size));
-		mat4 matR = multiplymat4(rotateY(rotationSpeedArray[i]), rotateX(planetInstanceArray[i].axialTilt+45.0f));
-		mat4 m = multiplymat4(matT,matR);
-		planetTransform[i] = translatevec3(translation);
-
-		initMVP(planetShader, m, v);
-
-    	glBindVertexArray (planetVAO);
-    	bindTexture(GL_TEXTURE0, planetInstanceArray[i].texture);
-    	bindTexture(GL_TEXTURE1, planetInstanceArray[i].normal);
-    	bindTexture(GL_TEXTURE2, planetInstanceArray[i].displacement);
-    	glUniform1i(glGetUniformLocation(planetShader, "tex"), 0);
-    	glUniform1i(glGetUniformLocation(planetShader, "normalTex"), 1);
-    	glUniform1i(glGetUniformLocation(planetShader, "depthMap"), 2);
-    	glUniformMatrix4fv( glGetUniformLocation(planetShader, "translation" ), 1, GL_FALSE, &matT.m[0][0] );
-    	glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber);
-    	glBindVertexArray(0);
-    }
-}
-
-void drawOrbits()
-{
-	glUseProgram(orbitShader);
-
-	// Faint white lines, the standard astronomy-app look. Depth is tested so
-	// planet bodies hide the far side of an orbit, but the lines never write
-	// depth, so they don't occlude anything themselves.
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glDepthMask(GL_FALSE);
-
-	glUniform1f(glGetUniformLocation(orbitShader, "uAlpha"), 0.4f);
-
-	for(int i = 0; i < 11; i++)
-	{
-		// Same circle drawPlanet() orbits on: XZ plane, planet's radius as scale.
-		mat4 m = scale(planetInstanceArray[i].radius);
-		initMVP(orbitShader, m, v);
-
-		glBindVertexArray(orbitVAO);
-		glDrawArrays(GL_LINE_LOOP, 0, ORBIT_SEGMENTS);
-		glBindVertexArray(0);
-	}
-
-	glDepthMask(GL_TRUE);
-	glDisable(GL_BLEND);
-}
-
-void drawPlanetRing()
-{
-	glUseProgram(ringShader);
-
-	for(int i = 0; i < 11; i++)
-	{
-		if(planetInstanceArray[i].createRing) {
-			// Additive glow like the atmosphere, but alpha-weighted so the band
-			// gaps (e.g. the Cassini division) show the planet through. Depth
-			// is tested but not written: the planet drawn earlier already hides
-			// the far ring, and the ring is a pure overlay in front of it.
-			glEnable(GL_BLEND);
-			glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-			glDisable(GL_CULL_FACE);
-			glDepthMask(GL_FALSE);
-
-			mat4 modelmat = planetTransform[i];
-			mat4 m = multiplymat4(multiplymat4(modelmat, rotateX(planetInstanceArray[i].axialTilt+45.0f)),
-				scale(planetInstanceArray[i].size));
-
-			initMVP(ringShader, m, v);
-			glUniform3f(glGetUniformLocation(ringShader, "planetCenter"),
-				modelmat.m[0][3], modelmat.m[1][3], modelmat.m[2][3]);
-			glUniform1f(glGetUniformLocation(ringShader, "planetRadius"), planetInstanceArray[i].size);
-
-			glBindVertexArray(ringVAO[i]);
-			bindTexture(GL_TEXTURE0, planetInstanceArray[i].ringTex);
-			glUniform1i(glGetUniformLocation(ringShader, "tex"), 0);
-			glDrawArrays( GL_TRIANGLES, 0, ringArray[i].vertexNumber);
-			glBindVertexArray(0);
-
-			glEnable(GL_CULL_FACE);
-			glDisable(GL_BLEND);
-			glDepthMask(GL_TRUE);
-		}
-	}
-}
-
-void drawMoon()
-{
-	glUseProgram(planetShader);
-	setupLighting(planetShader);
-	int c = 0;
-	for(int i = 0; i < 11; i++)
-	{
-		for(int j = 0; j < planetInstanceArray[i].numMoons; j++)
-		{
-			translation.x = (moonInstanceArray[c].radius + planetInstanceArray[i].size) * (float)cos(moonOrbitSpeedArray[c]);
-			translation.y = 0.0;
-			translation.z = (moonInstanceArray[c].radius + planetInstanceArray[i].size) * (float)sin(moonOrbitSpeedArray[c]);
-
-			mat4 m = multiplymat4(multiplymat4(planetTransform[i], translatevec3(translation)), scale(moonInstanceArray[c].size));
-
-			initMVP(planetShader, m, v);
-
-			glBindVertexArray (planetVAO);
-			bindTexture(GL_TEXTURE0, moonInstanceArray[c].texture);
-			bindTexture(GL_TEXTURE1, moonInstanceArray[c].normal);
-			bindTexture(GL_TEXTURE2, moonDisplacementTexture);
-			glUniform1i(glGetUniformLocation(planetShader, "tex"), 0);
-			glUniform1i(glGetUniformLocation(planetShader, "normalTex"), 1);
-			glUniform1i(glGetUniformLocation(planetShader, "depthMap"), 2);
-			glDrawArrays( GL_TRIANGLES, 0, planet.vertexNumber );
-			c++;
-		}
-	}
-	glBindVertexArray(0);
 }
 
 #ifdef _WIN32
@@ -1893,7 +217,6 @@ GLFWwindow *setupGLFW() {
 		fprintf(stderr, "[trace] glfw: maximized %dx%d, aspect %.3f\n", ww, wh, ASPECT);
 	}
 	glfwMakeContextCurrent(window);
-#ifndef __APPLE__
 	if (!gladLoadGL(gladGetProcAddress))
 	{
 		fprintf(stderr, "[trace] gl: gladLoadGL FAILED\n");
@@ -1902,7 +225,6 @@ GLFWwindow *setupGLFW() {
 	}
 	fprintf(stderr, "[trace] gl: version = %s\n", (const char *)glGetString(GL_VERSION));
 	glfwSwapInterval(1);
-#endif
 	//glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_ENABLED);
 	glfwSetKeyCallback(window, key_callback);
 	glfwSetCursorPosCallback(window, mouse_callback);
@@ -1912,25 +234,13 @@ GLFWwindow *setupGLFW() {
 	return window;
 }
 
-int initCubemap()
-{
-	char *cubemapArray[] = {
-		"assets/textures/skybox3/right.png",
-		"assets/textures/skybox3/left.png",
-		"assets/textures/skybox3/top.png",
-		"assets/textures/skybox3/bottom.png",
-		"assets/textures/skybox3/back.png",
-		"assets/textures/skybox3/front.png"
-	};
-	return loadCubemap(cubemapArray);
-}
 
 void setupUIButtons()
 {
 	for (int i = 0; i < UI_TARGET_COUNT; i++)
 	{
 		uiAddButton(uiTargets[i].actId, uiTargets[i].icon, uiTargets[i].activeIcon);
-		finishLoadingStep();
+		LoadingScreen_Step();
 	}
 }
 
@@ -2021,36 +331,36 @@ void setupUIMoonButtons()
     moonChevronRight = createChevronTexture(+1);
 
     /* First global index of each planet's (contiguous) moon block inside
-       moonInstanceArray. Defs are added in planet order, so a planet's moons
+       Bodies_Moons(). Defs are added in planet order, so a planet's moons
        are consecutive; moonStart[p] is the first one. */
     int moonStart[11];
     for (int p = 0; p < 11; p++)
         moonStart[p] = -1;
-    for (int c = 0; c < loadedMoonCount; c++)
+    for (int c = 0; c < Bodies_MoonCount(); c++)
     {
-        int p = moonInstanceArray[c].planet;
+        int p = Bodies_Moons()[c].planet;
         if (moonStart[p] < 0)
             moonStart[p] = c;
     }
 
     for (int p = 0; p < 11; p++)
     {
-        if (planetInstanceArray[p].numMoons <= 0)
+        if (Bodies_Planets()[p].numMoons <= 0)
             continue;
 
         /* Collapsible toggle, always visible. Collapsed icon = "<", expanded
            (active) icon = ">" via the button's active-texture swap. */
         uiAddButtonTex(UI_ACT_TOGGLE_BASE + p, p,
                        moonChevronLeft, moonChevronRight, 1);
-        finishLoadingStep();
+        LoadingScreen_Step();
 
         /* One moon button per moon, hidden until the panel is expanded. */
-        for (int j = 0; j < planetInstanceArray[p].numMoons; j++)
+        for (int j = 0; j < Bodies_Planets()[p].numMoons; j++)
         {
             int m = moonStart[p] + j;
             uiAddButtonTex(UI_ACT_MOON_BASE + m, p,
-                           moonInstanceArray[m].texture, 0, 0);
-            finishLoadingStep();
+                           Bodies_Moons()[m].texture, 0, 0);
+            LoadingScreen_Step();
         }
     }
 }
@@ -2101,29 +411,6 @@ void uiSetupCameraSliders()
 		sliderAccentScroll);
 }
 
-/* Same position formula drawPlanet uses each frame. */
-vec3 getPlanetWorldPosition(int i)
-{
-	vec3 p;
-	p.x = planetInstanceArray[i].radius * (float)cos(orbitSpeedArray[i]);
-	p.y = 0.0f;
-	p.z = planetInstanceArray[i].radius * (float)sin(orbitSpeedArray[i]);
-	return p;
-}
-
-/* Same position formula drawMoon uses each frame: the planet's centre plus
-   the moon's offset around it (orbit radius = moon.radius + planet.size,
-   angle = moonOrbitSpeedArray). Returns world space. */
-vec3 getMoonWorldPosition(int m)
-{
-	int p = moonInstanceArray[m].planet;
-	float r = moonInstanceArray[m].radius + planetInstanceArray[p].size;
-	vec3 off;
-	off.x = r * (float)cos(moonOrbitSpeedArray[m]);
-	off.y = 0.0f;
-	off.z = r * (float)sin(moonOrbitSpeedArray[m]);
-	return addvec3(getPlanetWorldPosition(p), off);
-}
 
 /* Eases the arcball pivot to the followed body, and (while focusDolly is
    set, right after a button click) dollies CameraDistance to a comfortable
@@ -2149,13 +436,13 @@ void updateCameraFollow()
 	else if (followTarget >= UI_ACT_MOON_BASE)
 	{
 		int m = followTarget - UI_ACT_MOON_BASE;
-		goal = getMoonWorldPosition(m);
-		goalDist = moonInstanceArray[m].size * 3.0f;
+		goal = Bodies_MoonWorldPosition(m);
+		goalDist = Bodies_Moons()[m].size * 3.0f;
 	}
 	else
 	{
-		goal = getPlanetWorldPosition(followTarget);
-		goalDist = planetInstanceArray[followTarget].size * 3.0f;
+		goal = Bodies_PlanetWorldPosition(followTarget);
+		goalDist = Bodies_Planets()[followTarget].size * 3.0f;
 	}
 
 	float k = 1.0f - expf(-6.0f * deltaTime);
@@ -2183,9 +470,6 @@ int main(int argc, char *argv[])
 {
 	setvbuf(stderr, NULL, _IONBF, 0);
 	fprintf(stderr, "[trace] main: start\n");
-#ifdef __APPLE__
-	chdir("/Users/tjgreen/Documents/OpenGL/Sol");
-#else
 	{
 		char exePath[MAX_PATH];
 		GetModuleFileNameA(NULL, exePath, MAX_PATH);
@@ -2199,7 +483,6 @@ int main(int argc, char *argv[])
 		}
 		_chdir(exePath);
 	}
-#endif
 	{
 		char cwd[MAX_PATH];
 #ifdef _WIN32
@@ -2216,48 +499,32 @@ int main(int argc, char *argv[])
 
 	// Show the loading screen before the first blocking load, so the window
 	// never sits blank/unresponsive while textures are decoded.
-	loadWindow = window;
-	initLoadingScreen();
-	loadStepDone = 0;
-	renderLoadingScreen(0.0f);
+	LoadingScreen_Init(window);
+	LoadingScreen_Render(0.0f);
 
 	fprintf(stderr, "[trace] main: loading skybox\n");
-	GLuint skyboxTexture = initCubemap();
-	finishLoadingStep();
+	GLuint skyboxTexture = Skybox_LoadCube();
+	LoadingScreen_Step();
 	fprintf(stderr, "[trace] main: skybox loaded\n");
-
-	//GLFWwindow* window2 = glfwCreateWindow(500, 500, "SolarSystem", NULL, NULL);
-	//glfwMakeContextCurrent(window2);
-
-	/*Cross platform compatibility stuff uncomment if not on mac
-	GLenum err = glewInit();
-	if (GLEW_OK != err)
-	{
-  		printf(stderr, "Error: %s\n", glewGetErrorString(err));
-	}*/
-
 	fprintf(stderr, "[trace] main: loading sun textures\n");
-	sunTexture = loadTexture("assets/textures/planets/sun2.jpg");
-	finishLoadingStep();
-	sunNormal = loadTexture("assets/textures/planets/sunNormal.png");
-	finishLoadingStep();
+	Sun_InitTextures(LoadingScreen_Step);
 	fprintf(stderr, "[trace] main: planetBuilder\n");
-	planetBuilder(); // steps inside its texture loops
+	Bodies_InitPlanets(LoadingScreen_Step); // steps inside its texture loops
 	fprintf(stderr, "[trace] main: moonBuilder\n");
-	moonBuilder(); // steps inside
+	Bodies_InitMoons(LoadingScreen_Step); // steps inside
 	fprintf(stderr, "[trace] main: atmosphereBuilder\n");
-	atmosphereBuilder();
-	finishLoadingStep();
+	Bodies_InitAtmospheres();
+	LoadingScreen_Step();
 	fprintf(stderr, "[trace] main: init\n");
 	init();
-	finishLoadingStep();
+	LoadingScreen_Step();
 	fprintf(stderr, "[trace] main: perspective\n");
 	createPerspectiveMatrix();
 
 	// Start the sim clock at the current UTC date/time and prime every body
 	// angle from it, so the scene opens on the real sky (planets at their
 	// current heliocentric mean longitudes).
-	initSimTime();
+	SimTime_Init();
 	updateBodies(0.0f);
 
 	glEnable(GL_CULL_FACE);
@@ -2265,15 +532,15 @@ int main(int argc, char *argv[])
 	glCullFace(GL_BACK);
 
 	attachGUIShaders();
-	finishLoadingStep();
+	LoadingScreen_Step();
 	uiInit();
 	setupUIButtons();
 	setupUIMoonButtons();
 	uiSetupCameraSliders();
 	// Sim-speed presets (1 day / 1 week / 1 year per second of real time).
-	uiAddTextButton(UI_ACT_SPEED_BASE + 0, simSpeedLabels[0]);
-	uiAddTextButton(UI_ACT_SPEED_BASE + 1, simSpeedLabels[1]);
-	uiAddTextButton(UI_ACT_SPEED_BASE + 2, simSpeedLabels[2]);
+	uiAddTextButton(UI_ACT_SPEED_BASE + 0, SimTime_PresetLabel(0));
+	uiAddTextButton(UI_ACT_SPEED_BASE + 1, SimTime_PresetLabel(1));
+	uiAddTextButton(UI_ACT_SPEED_BASE + 2, SimTime_PresetLabel(2));
 	{
 		int ww, wh;
 		glfwGetWindowSize(window, &ww, &wh);
@@ -2284,8 +551,7 @@ int main(int argc, char *argv[])
 	}
 	// Some moons may be missing on disk, so the count above can land below
 	// 100%; force one final full-bar frame before handing over to the scene.
-	renderLoadingScreen(1.0f);
-	loadWindow = NULL;
+	LoadingScreen_Finish();
 	fprintf(stderr, "[trace] main: enter render loop\n");
 
 	float fpsFrames= 0;
@@ -2298,6 +564,9 @@ int main(int argc, char *argv[])
         gFrame++;
         updateCameraFollow();
         v = getViewMatrix();
+        appView.proj = p;
+        appView.view = v;
+        appView.frame = gFrame;
 
         fpsFrames++;
 		if(currentFrame - lastTime >= 1.0)
@@ -2319,61 +588,59 @@ int main(int argc, char *argv[])
 				glViewport(0, 0, fbw, fbh);
 		}
 
-		drawSkybox(skyboxTexture);
+		Skybox_Draw(skyboxTexture, &appView);
 		// Opaque sun sphere first: it writes depth, so it occludes any planet
 		// that orbits behind it (a closer planet still draws over the disc).
-		drawSunDisc();
-		drawPlanet();
-		drawOrbits();
-		drawPlanetRing();
-		drawBelts();
-		//glFrontFace(GL_CW);
-		drawAtmosphere();
-		//glFrontFace(GL_CCW);
-		drawComets();
-		drawMoon();
+		Sun_DrawDisc(&appView);
+		Planet_Draw(&appView);
+		Orbits_Draw(&appView);
+		Rings_Draw(&appView);
+		Belt_Draw(&appView);
+		Atmosphere_Draw(&appView);
+		Comet_Draw(&appView);
+		Moon_Draw(&appView);
 		// Corona halo last: additive, no depth write, so it blends over
 		// anything behind it while still being occluded by anything in front.
-		drawSun();
+		Sun_DrawGlow(&appView);
 
 		/* HUD clock: the current sim date, its offset from J2000, and the
 		   active speed preset (or PAUSED). uiDrawText sets up its own shader
 		   state, so it runs just before the widget pass below. */
 		{
 			int yy, mo, dd, hh, mi, ss;
-			jdToCalendar(simDays + 2451545.0, &yy, &mo, &dd, &hh, &mi, &ss);
+			SimTime_JulianDateToCalendar(SimTime_Days() + 2451545.0, &yy, &mo, &dd, &hh, &mi, &ss);
 			char dateBuf[64];
 			char offBuf[64];
 			char spdBuf[48];
 			sprintf(dateBuf, "%04d-%02d-%02d %02d:%02d:%02d", yy, mo, dd, hh, mi, ss);
-			sprintf(offBuf, "J2000 %+.1f D", simDays);
-			if (stopRotation == 0)
-				sprintf(spdBuf, "%d  %s", simSpeedIndex + 1, simSpeedLabels[simSpeedIndex]);
+			sprintf(offBuf, "J2000 %+.1f D", SimTime_Days());
+			if (!SimTime_Paused())
+				sprintf(spdBuf, "%d  %s", SimTime_PresetIndex() + 1, SimTime_PresetLabel(SimTime_PresetIndex()));
 			else
 				strcpy(spdBuf, "PAUSED");
 			uiDrawText(dateBuf, 24.0f, 24.0f, 2.0f, 1.0f, 1.0f, 1.0f, 0.95f);
 			uiDrawText(offBuf, 24.0f, 44.0f, 1.6f, 0.72f, 0.78f, 0.90f, 0.90f);
 			uiDrawText(spdBuf, 24.0f, 64.0f, 1.6f, 0.85f, 0.85f, 0.85f, 0.85f);
-			for (int si = 0; si < SIM_SPEED_PRESET_COUNT; si++)
-				uiSetTextButtonSelected(UI_ACT_SPEED_BASE + si, simSpeedIndex == si);
+			for (int si = 0; si < SimTime_PresetCount(); si++)
+				uiSetTextButtonSelected(UI_ACT_SPEED_BASE + si, SimTime_PresetIndex() == si);
 		}
 
 		/* UI last: no depth test, standard alpha blend, its own state. */
-		uiDrawAll(followTarget, stopRotation);
+		uiDrawAll(followTarget, SimTime_Paused());
 
-		if(stopRotation == 0){
+		if(!SimTime_Paused()){
 			// The sim clock (days since J2000) advances by the active speed
 			// preset times the frame delta. Every body position is recomputed
 			// absolutely from simDays in updateBodies, so it is frame-rate
 			// independent and speed changes never accumulate error. Clamped so
 			// the first frame (deltaTime spans the whole texture load) and long
 			// stalls advance a few days, not a teleport.
-			float dDays = (float)(simDaysPerSec * deltaTime);
+			float dDays = (float)(SimTime_DaysPerSec() * deltaTime);
 			if (dDays > 10.0f)
 				dDays = 10.0f;
 			if (dDays > 0.0f)
 			{
-				simDays += dDays;
+				SimTime_Advance(dDays);
 				updateBodies(dDays);
 			}
 		}
@@ -2381,45 +648,16 @@ int main(int argc, char *argv[])
 		glfwSwapBuffers(window);
 	}
 
-	glDeleteVertexArrays(1, &planetVAO);
-    glDeleteBuffers(1, &planetVBO);
-    for(int i = 0; i < 11; i++)
-    {
-    	if(planetInstanceArray[i].createRing)
-    	{
-			glDeleteVertexArrays(1, &ringVAO[i]);
-			glDeleteBuffers(1, &ringVBO[i]);
-			free(ringArray[i].points);
-			free(ringArray[i].normals);
-			free(ringArray[i].texCoords);
-			glDeleteTextures(1, &planetInstanceArray[i].ringTex);
-		}
-	}
+	Planet_Shutdown();
+	Rings_Shutdown();
 
-	glDeleteVertexArrays(1, &asteroidBelt.vao);
-	glDeleteBuffers(1, &asteroidBelt.vbo);
-	glDeleteBuffers(1, &asteroidBelt.ibo);
-	glDeleteVertexArrays(1, &kuiperBelt.vao);
-	glDeleteBuffers(1, &kuiperBelt.vbo);
-	glDeleteBuffers(1, &kuiperBelt.ibo);
-
-	for(int ci = 0; ci < COMET_COUNT; ci++)
-	{
-		glDeleteVertexArrays(1, &comets[ci].vao);
-		glDeleteBuffers(1, &comets[ci].vbo);
-		glDeleteVertexArrays(1, &comets[ci].tailVao);
-		glDeleteBuffers(1, &comets[ci].quadVbo);
-		glDeleteBuffers(1, &comets[ci].tailVbo);
-		free(comets[ci].mesh.points);
-		free(comets[ci].mesh.normals);
-	}
-	glDeleteProgram(cometShader);
-	glDeleteProgram(tailShader);
+	Belt_Shutdown();
+	Comet_Shutdown();
 
 	uiShutdown();
 	/* Chevron icons are shared, caller-owned textures (owned == 0 in the
 	   buttons), so uiShutdown doesn't free them — delete them here. The moon
-	   buttons reference moonInstanceArray textures, which (as before) are not
+	   buttons reference Bodies_Moons() textures, which (as before) are not
 	   freed at shutdown. */
 	if (moonChevronLeft)
 		glDeleteTextures(1, &moonChevronLeft);
@@ -2458,23 +696,17 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     if(action == GLFW_RELEASE)
     	keys = 0;
     if (key == GLFW_KEY_R && action == GLFW_PRESS){
-		if(stopRotation == 0)
-			stopRotation = 1;
-		else
-			stopRotation = 0;
+		SimTime_TogglePause();
     }
     // Sim-speed presets: 1 day/sec, 1 week/sec, 1 year/sec.
     if (key == GLFW_KEY_1 && action == GLFW_PRESS){
-		simSpeedIndex = 0;
-		simDaysPerSec = simSpeedPresetDaysPerSec[0];
+		SimTime_SetPreset(0);
     }
     if (key == GLFW_KEY_2 && action == GLFW_PRESS){
-		simSpeedIndex = 1;
-		simDaysPerSec = simSpeedPresetDaysPerSec[1];
+		SimTime_SetPreset(1);
     }
     if (key == GLFW_KEY_3 && action == GLFW_PRESS){
-		simSpeedIndex = 2;
-		simDaysPerSec = simSpeedPresetDaysPerSec[2];
+		SimTime_SetPreset(2);
     }
 }
 
@@ -2500,14 +732,13 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 		int id = uiHitTest((float)mx, (float)my);
 		if (id == UI_ACT_PAUSE)
 		{
-			stopRotation = stopRotation ? 0 : 1;
+			SimTime_TogglePause();
 		}
-		else if (id >= UI_ACT_SPEED_BASE && id < UI_ACT_SPEED_BASE + SIM_SPEED_PRESET_COUNT)
+		else if (id >= UI_ACT_SPEED_BASE && id < UI_ACT_SPEED_BASE + SimTime_PresetCount())
 		{
 			/* Sim-speed preset buttons are 300+index. */
 			int si = id - UI_ACT_SPEED_BASE;
-			simSpeedIndex = si;
-			simDaysPerSec = simSpeedPresetDaysPerSec[si];
+			SimTime_SetPreset(si);
 		}
 		else if (id >= UI_ACT_TOGGLE_BASE)
 		{
