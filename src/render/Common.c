@@ -118,6 +118,12 @@ void bindTexture(GLuint activeTex, GLuint tex) {
     glBindTexture(GL_TEXTURE_2D, tex);
 }
 
+vec4 glGetLightPosition(void)
+{
+    vec4 light_position = {0.0f, 0.0f, 1.0f, 1.0f};
+    return light_position;
+}
+
 void glSetupPlanetLighting(GLuint program)
 {
     vec4 light_ambient = {0.2f, 0.2f, 0.2f, 1.0f};
@@ -128,7 +134,7 @@ void glSetupPlanetLighting(GLuint program)
     vec4 material_diffuse = {0.8f, 0.8f, 0.8f, 1.0f};
     vec4 material_specular = {0.5f, 0.5f, 0.5f, 1.0f};
 
-    vec4 light_position = {0.0f, 0.0f, 1.0f, 1.0f};
+    vec4 light_position = glGetLightPosition();
     float material_shininess = 50.0f;
 
     vec4 ambient_product = multiplyvec4(light_ambient, material_ambient);

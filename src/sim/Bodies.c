@@ -201,11 +201,11 @@ void Bodies_InitPlanets(void (*step)(void))
 	jupiter.radius = 5.2f*planetRadMult; jupiter.size = 11.209f*planetScaleMult; jupiter.orbit = 11.8618f; jupiter.axialTilt = 3.13f; jupiter.day = 0.413f; jupiter.createAtmosphere = 1; jupiter.createRing = 0;
 	jupiter.texture = planetTexArray[5]; jupiter.normal = planetNormArray[5]; jupiter.displacement = planetDisplacementArray[5];
 	// ringInner/ringOuter are the ring edges as a multiple of the planet radius
-	saturn.radius = 9.5f*planetRadMult; saturn.size = 9.45f*planetScaleMult; saturn.orbit = 29.4571f; saturn.axialTilt = 26.73f; saturn.day = 0.439583f; saturn.createAtmosphere = 0; saturn.createRing = 1; saturn.ringInner = 1.24f; saturn.ringOuter = 2.27f;
+	saturn.radius = 9.5f*planetRadMult; saturn.size = 9.45f*planetScaleMult; saturn.orbit = 29.4571f; saturn.axialTilt = 26.73f; saturn.day = 0.439583f; saturn.createAtmosphere = 1; saturn.createRing = 1; saturn.ringInner = 1.24f; saturn.ringOuter = 2.27f;
 	saturn.texture = planetTexArray[6]; saturn.normal = planetNormArray[6]; saturn.displacement = planetDisplacementArray[6];
-	uranus.radius = 19.2f*planetRadMult; uranus.size = 4.007f*planetScaleMult; uranus.orbit = 84.0205f; uranus.axialTilt = 97.77f; uranus.day = 0.71833f; uranus.createAtmosphere = 0; uranus.createRing = 1; uranus.ringInner = 1.55f; uranus.ringOuter = 2.05f;
+	uranus.radius = 19.2f*planetRadMult; uranus.size = 4.007f*planetScaleMult; uranus.orbit = 84.0205f; uranus.axialTilt = 97.77f; uranus.day = 0.71833f; uranus.createAtmosphere = 1; uranus.createRing = 1; uranus.ringInner = 1.55f; uranus.ringOuter = 2.05f;
 	uranus.texture = planetTexArray[7]; uranus.normal = planetNormArray[7]; uranus.displacement = planetDisplacementArray[7];
-	neptune.radius = 30.1f*planetRadMult; neptune.size = 3.883f*planetScaleMult; neptune.orbit = 164.8f; neptune.axialTilt = 28.32f; neptune.day = 0.6713f; neptune.createAtmosphere = 0; neptune.createRing = 0;
+	neptune.radius = 30.1f*planetRadMult; neptune.size = 3.883f*planetScaleMult; neptune.orbit = 164.8f; neptune.axialTilt = 28.32f; neptune.day = 0.6713f; neptune.createAtmosphere = 1; neptune.createRing = 0;
 	neptune.texture = planetTexArray[8]; neptune.normal = planetNormArray[8]; neptune.displacement = planetDisplacementArray[8];
 	pluto.radius = 39*planetRadMult; pluto.size = 0.18f*planetScaleMult; pluto.orbit = 248; pluto.axialTilt = 119.591f; pluto.day = 6.387230f; pluto.createAtmosphere = 1; pluto.createRing = 0;
 	pluto.texture = planetTexArray[9]; pluto.normal = planetNormArray[9]; pluto.displacement = planetDisplacementArray[9];
@@ -317,9 +317,24 @@ void Bodies_InitAtmospheres(void)
 	eris.scaleFactor = 1.001f; 	eris.E = 1.5f; 		eris.C_R.x = 0.80f; 	eris.C_R.y = 0.86f; 	eris.C_R.z = 0.95f;
 	// H2/He gas giant, ammonia-charged cloud haze -> soft warm cream; ~1/27x sun.
 	jupiter.scaleFactor = 1.1448f;jupiter.E = 0.53f; 	jupiter.C_R.x = 1.0f; 	jupiter.C_R.y = 0.93f; 	jupiter.C_R.z = 0.80f;
-	saturn.scaleFactor = 0.0f; 	saturn.E = 14.3f; 	saturn.C_R.x = 0.3f; 	saturn.C_R.y = 0.7f; 	saturn.C_R.z = 1.0f;
-	uranus.scaleFactor = 0.0f; 	uranus.E = 14.3f; 	uranus.C_R.x = 0.3f; 	uranus.C_R.y = 0.7f; 	uranus.C_R.z = 1.0f;
-	neptune.scaleFactor = 0.0f; 	neptune.E = 14.3f; 	neptune.C_R.x = 0.3f; 	neptune.C_R.y = 0.7f; 	neptune.C_R.z = 1.0f;
+	// H2/He with ammonia-crystal / H2S photochemical haze -> pale desaturated
+	// gold, lighter and less saturated than Jupiter (the haze whitens the
+	// bands). True flux ~0.16 (1/90 sun); boosted like the outer bodies so the
+	// big haze envelope (scale height ~47 km, the largest of the planets)
+	// still shows a limb glow at that distance.
+	saturn.scaleFactor = 1.0600f; saturn.E = 0.40f; 	saturn.C_R.x = 1.00f; 	saturn.C_R.y = 0.95f; 	saturn.C_R.z = 0.83f;
+	// H2/He/CH4, but the thickest photochemical haze of the ice giants: the
+	// stagnant atmosphere lets the Aerosol-2 haze layer build up and whiten
+	// the strong methane blue down to a pale low-saturation cyan. True flux
+	// ~0.039 is invisible; boosted per the Pluto/Eris visibility precedent,
+	// brightest of the outer trio because its haze is thickest and most
+	// reflective.
+	uranus.scaleFactor = 1.0350f; uranus.E = 1.6f; 	uranus.C_R.x = 0.62f; 	uranus.C_R.y = 0.86f; 	uranus.C_R.z = 1.00f;
+	// H2/He/CH4 with a thinner haze than Uranus (turbulent convection churns
+	// methane into the Aerosol-2 layer and precipitates it out as methane
+	// snow), so Rayleigh scattering + methane red absorption dominate -> the
+	// deep saturated azure. True flux ~0.016; boosted for visibility.
+	neptune.scaleFactor = 1.0300f; neptune.E = 1.4f; 	neptune.C_R.x = 0.30f; 	neptune.C_R.y = 0.55f; 	neptune.C_R.z = 1.00f;
 	// Thin N2/CH4 haze -> pale ice-blue. True flux ~0.009 (invisible); E = 2.0
 	// keeps the (stylized) shell faintly visible.
 	pluto.scaleFactor = 3.5000f; pluto.E = 2.0f; 	pluto.C_R.x = 0.75f; 	pluto.C_R.y = 0.83f; 	pluto.C_R.z = 1.0f; // pale ice-blue (kept at 1.0, the blue of the N2 haze)

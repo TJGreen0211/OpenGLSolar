@@ -60,17 +60,16 @@ void Atmosphere_Draw(const ViewMatrices *vm)
 
 			//mat4 m = multiplymat4(translatevec3(translation), scale());
 			mat4 m = multiplymat4(modelmat, scale(Bodies_Planets()[i].size*scaleFactor));
-			// Per-body solar brightness + Rayleigh tint (set in atmosphereBuilder()).
-			// The white Mie term is summed on top, so C_R's RGB sets each limb's hue.
 			vec3 C_R = Bodies_Atmospheres()[i].C_R;
 			float E = Bodies_Atmospheres()[i].E;
+			vec4 lightPos = glGetLightPosition();
 
 			glUniform1f(glGetUniformLocation(atmosphereShader, "fInnerRadius"), fInner);
 			glUniform1f(glGetUniformLocation(atmosphereShader, "fOuterRadius"), fOuter);
 			glUniform3f(glGetUniformLocation(atmosphereShader, "camPosition"), camPosition.x, camPosition.y, camPosition.z);
 			glUniform3f(glGetUniformLocation(atmosphereShader, "C_R"), C_R.x, C_R.y, C_R.z);
 			glUniform1f(glGetUniformLocation(atmosphereShader, "E"), E);
-			glUniform1f(glGetUniformLocation(atmosphereShader, "time"), (float)glfwGetTime());
+			glUniform4f(glGetUniformLocation(atmosphereShader, "lightPos"), lightPos.x, lightPos.y, lightPos.z, lightPos.w);
 
 			glSetupMVP(atmosphereShader, m, vm, vm->frame);
 
@@ -82,11 +81,20 @@ void Atmosphere_Draw(const ViewMatrices *vm)
 			// pass and must not write depth, or its surface would hide the
 			// moon/objects beyond the shell behind it.
 			float camDistSq = camPosition.x*camPosition.x + camPosition.y*camPosition.y + camPosition.z*camPosition.z;
+			int inside = camDistSq < fOuter*fOuter;
 			glDepthMask(GL_FALSE);
-			if (camDistSq < fOuter*fOuter) {
+			if (inside) {
+				// The dome surface surrounds the camera: its far side lies
+				// BEHIND the planet, so depth testing would punch a skyless
+				// hole where the planet is and pop the fog on shell crossing.
+				// The shader already clips the scattering ray at the planet
+				// surface, so blending the in-scatter over the planet is the
+				// correct aerial-perspective result.
 				glCullFace(GL_FRONT);
+				glDisable(GL_DEPTH_TEST);
 			}
 			glDrawArrays( GL_TRIANGLES, 0, Planet_MeshVertexCount());
+			if (inside) glEnable(GL_DEPTH_TEST);
 			glCullFace(GL_BACK);
 			glDepthMask(GL_TRUE);
 			glBindVertexArray(0);

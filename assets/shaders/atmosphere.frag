@@ -1,33 +1,24 @@
 #version 410
 
-uniform float time;
-uniform float E;
 uniform vec3 camPosition;
-uniform vec3 translation;
 uniform vec3 C_R;
+uniform float E;
+uniform vec4 lightPos;
 
+uniform float fInnerRadius;
+uniform float fOuterRadius;
 
-in vec4 fPosition;
+in vec4 fWorldPos;
 in vec3 fLocalPos;
-in vec3 fNormal;
-in mat4 m;
-in mat4 v;
 
 out vec4 FragColor;
 
 const float PI = 3.14159265359;
-const float degToRad = PI / 180.0;
 const float MAX = 10000.0;
 
-const float DEG_TO_RAD = PI / 180.0;
-float K_R = 0.166;//Rayleigh constant > thicker
+const float K_R = 0.166;//Rayleigh constant > thicker
 const float K_M = 0.0025;//Mie constant > thicker
-//const float E = 14.3;//Sun brightness
-//const vec3 C_R = vec3(0.3, 0.7, 1.0);
 const float G_M = -0.85;
-
-uniform float fInnerRadius;
-uniform float fOuterRadius;
 
 float SCALE_H = 4.0 / (fOuterRadius - fInnerRadius);
 float SCALE_L = 1.0 / (fOuterRadius - fInnerRadius);
@@ -38,13 +29,11 @@ const int numInScatter = 5;
 const float fNumInScatter = 5.0;
 
 vec3 rayDirection(vec3 camPosition) {
-	// fLocalPos and camPosition are both in planet-local space
-	// (the spheres in rayIntersection are centered on the planet);
-	// m*fPosition would be a world-space vertex and the ray origin
-	// would be off by the planet's orbital position
-	// vec4 ray = vec4(fLocalPos, 1.0) - vec4(camPosition, 1.0);
-	vec4 ray = m*fPosition - vec4(camPosition, 1.0);
-	return normalize(vec3(ray));
+	// fLocalPos (dome vertex minus planet centre) and camPosition (camera
+	// minus planet centre) are both planet-local, matching the origin-centred
+	// rayIntersection spheres. Identical to the old m*fPosition form for the
+	// T*S dome matrix, but robust if the model ever gains rotation.
+	return normalize(fLocalPos - camPosition);
 }
 
 vec2 rayIntersection(vec3 p, vec3 dir, float radius ) {
@@ -130,7 +119,9 @@ void main (void)
 	vec3 dir = rayDirection(camPosition);
 	vec3 eye = camPosition;
 
-	vec3 l = -normalize(vec3(fPosition*m - vec4(0.0, 0.0, 1.0, 1.0)));
+	// direction from the fragment towards the light, same light position the
+	// planet pass uses (glGetLightPosition()) so the terminators agree
+	vec3 l = normalize(lightPos.xyz - fWorldPos.xyz);
 	vec2 e = rayIntersection(eye, dir, fOuterRadius);
 	if ( e.x > e.y ) {
 		discard;

@@ -10,8 +10,11 @@
 void Atmosphere_InitGL(sphere mesh);
 
 // Additive per-planet sky-dome (Rayleigh limb tint + white Mie term), centred on
-// each planet's world translation (Planet_Transforms()). No depth write; the
-// cull face is swapped to GL_FRONT while the camera sits inside the outer shell.
+// each planet's world translation (Planet_Transforms()). No depth write; while
+// the camera sits inside the outer shell the cull face swaps to GL_FRONT and
+// depth testing is disabled, so the far hemisphere still blends its (surface-
+// clipped) in-scatter over the planet. The planet pass applies the matching
+// out-scatter extinction so fog is continuous across the shell boundary.
 void Atmosphere_Draw(const ViewMatrices *vm);
 
 #endif

@@ -8,6 +8,9 @@ void Moon_Draw(const ViewMatrices *vm)
 {
 	glUseProgram(Planet_Shader());
 	glSetupPlanetLighting(Planet_Shader());
+	// Moons have no shell of their own; clear the atmosphere flag the planet
+	// pass left on the shared program so no extinction is applied.
+	glUniform1f(glGetUniformLocation(Planet_Shader(), "hasAtmosphere"), 0.0f);
 	int c = 0;
 	for(int i = 0; i < 11; i++)
 	{

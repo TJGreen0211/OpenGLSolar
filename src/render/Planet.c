@@ -2,6 +2,7 @@
 #include "Main.h"
 #include "Bodies.h"
 #include "Planet.h"
+#include "Camera.h"
 
 static GLuint planetShader;
 static GLuint planetVAO, planetVBO;
@@ -75,8 +76,22 @@ void Planet_Draw(const ViewMatrices *vm)
     	bindTexture(GL_TEXTURE2, Bodies_Planets()[i].displacement);
     	glUniform1i(glGetUniformLocation(planetShader, "tex"), 0);
     	glUniform1i(glGetUniformLocation(planetShader, "normalTex"), 1);
-    	glUniform1i(glGetUniformLocation(planetShader, "depthMap"), 2);
+		glUniform1i(glGetUniformLocation(planetShader, "depthMap"), 2);
     	glUniformMatrix4fv( glGetUniformLocation(planetShader, "translation" ), 1, GL_FALSE, &matT.m[0][0] );
+
+    	// Atmospheric extinction for this body's own shell (matches the
+    	// shell Atmosphere_Draw() renders: skipped when the scale factor
+    	// leaves no real shell, e.g. Ceres). camLocalPos is the camera
+    	// relative to the body centre, the space the shell spheres use.
+    	int hasAtmo = Bodies_Planets()[i].createAtmosphere &&
+    	              Bodies_Atmospheres()[i].scaleFactor > 1.0f;
+    	vec3 camPos = getCameraPosition();
+    	glUniform1f(glGetUniformLocation(planetShader, "hasAtmosphere"), hasAtmo ? 1.0f : 0.0f);
+    	glUniform1f(glGetUniformLocation(planetShader, "fInnerRadius"), Bodies_Planets()[i].size);
+    	glUniform1f(glGetUniformLocation(planetShader, "fOuterRadius"), Bodies_Planets()[i].size * Bodies_Atmospheres()[i].scaleFactor);
+    	glUniform3f(glGetUniformLocation(planetShader, "C_R"), Bodies_Atmospheres()[i].C_R.x, Bodies_Atmospheres()[i].C_R.y, Bodies_Atmospheres()[i].C_R.z);
+    	glUniform3f(glGetUniformLocation(planetShader, "camLocalPos"), camPos.x - translation.x, camPos.y - translation.y, camPos.z - translation.z);
+
     	glDrawArrays( GL_TRIANGLES, 0, planetVertexCount);
     	glBindVertexArray(0);
     }

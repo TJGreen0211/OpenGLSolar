@@ -37,6 +37,9 @@ GLuint loadTexture(char const * path);
 void glSetupMVP(GLuint shader, mat4 model, const ViewMatrices *vm, int frame);
 void bindTexture(GLuint activeTex, GLuint tex);
 void glSetupPlanetLighting(GLuint program);
+// The single scene light position (world space). The planet pass uploads it as
+// lightPos and the atmosphere pass reads it so their terminators agree.
+vec4 glGetLightPosition(void);
 // Shared deterministic LCG for scene layout (belt + comet). Both must draw from
 // the same instance so their layout stays bit-reproducible.
 float SceneRand(void);

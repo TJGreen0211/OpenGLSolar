@@ -10,6 +10,7 @@ out vec3 fL;
 out vec3 fH;
 
 out vec4 TexCoords;
+out vec3 vLocalPos;
 
 uniform mat4 model;
 uniform mat4 view;
@@ -20,6 +21,11 @@ uniform vec4 lightPos;
 void main()
 {
 	gl_Position = vPosition*model*view*projection;
+	// Body-local position (world minus body centre): the centre is the model
+	// matrix translation column model[0][3]..model[2][3] (row-vector
+	// convention; model[3][0..2] is always zero). Used for the atmospheric
+	// extinction ray, whose spheres are centred on the origin.
+	vLocalPos = vec3(vPosition*model) - vec3(model[0][3], model[1][3], model[2][3]);
 	mat3 normalMatrix = transpose(inverse(mat3(model)));
 	vec3 T = normalize(vec3(vec4(vTangent, 0.0) * model));
 	vec3 N = normalize(vec3(vec4(vNormal, 0.0)) * normalMatrix);
