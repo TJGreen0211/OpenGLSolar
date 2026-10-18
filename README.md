@@ -11,7 +11,7 @@ A 3D solar system rendered in C with OpenGL 4.1 (core profile). Originally devel
 
 - Sun + 11 bodies (Mercury, Venus, Earth, Mars, Ceres, Jupiter, Saturn, Uranus, Neptune, Pluto, Eris) with real relative orbital periods, rotation durations, and axial tilts (see `sim/Bodies.c`).
 - Per-planet diffuse + normal map textures (all in `assets/textures/planets/`).
-- Atmospheric scattering shaders (Fresnel limb glow with per-body scale factor and color — see `sim/Bodies.c`, enabled for Venus/Earth/Mars/Pluto/Ceres/Jupiter/Eris).
+- Atmospheric scattering (GPU Gems 2 ch. 16): additive sky-dome in-scatter plus per-planet surface extinction (fog) in `planet.frag`, with per-body scale factor and color — see `sim/Bodies.c`, enabled for Venus/Earth/Mars/Pluto/Ceres/Jupiter/Eris). Consistent for the camera inside and outside the shell.
 - Multi-moon system: 21 moons, each with its own diffuse + normal map. Data + loads live in `sim/Bodies.c` and they're drawn by `render/Moon.c` (reusing the planet mesh); 20 of the 21 have textures on disk (`[trace] moonBuilder: 20/21`), and the builder logs the one it skips.
 - 6-face skybox cubemap (`assets/textures/skybox3/`).
 - GPU-instanced asteroid belt (1,500 rocks) and Kuiper belt (1,000 rocks) — `asteroid.obj` / `rock.obj` (`render/Belt.c`).

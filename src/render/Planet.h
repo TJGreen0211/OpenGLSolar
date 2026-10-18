@@ -18,6 +18,11 @@ GLuint Planet_Shader(void);
 GLuint Planet_VAO(void);
 int    Planet_MeshVertexCount(void);
 
+// Select the planet program's instanced-sphere mode (1 = quad-tree LOD
+// instance drawn through the vertex shader, 0 = plain tetrahedron mesh).
+// Must be called with the planet program current; Planet_Draw leaves it at 0.
+void Planet_SetInstanced(int on);
+
 // Per-planet world-translation matrices written by Planet_Draw (read by
 // Rings/Moon/Atmosphere to place themselves at the planet centre).
 const mat4 *Planet_Transforms(void);

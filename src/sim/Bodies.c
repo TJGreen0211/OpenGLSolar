@@ -124,23 +124,128 @@ static int *loadPlanetNormals(void (*step)(void), int planetTexArray[])
 	return planetTexArray;
 }
 
-static int *loadPlanetDisplacementMap(void (*step)(void), int planetTexArray[])
+/* Height maps for vertex displacement are DERIVED from the normal maps: the
+   tangent-space slopes n = 2*tex-1 give dh/du = -nx/nz, dh/dv = -ny/nz, and
+   integrating those gives height up to a per-path constant. Two path
+   integrals (along rows, along columns) are averaged to spread each one's
+   drift; the row integral also subtracts its linear residual so the seam at
+   u=0/u=1 closes. Result is normalized to [0,1] into an R8 texture
+   (mipmapped, repeat in S). On decode failure a 1x1 mid-gray texture
+   returns (flat surface). lodBase = log2(texelWidth/PI) is the mip a
+   full-face quadtree patch should fetch; the vertex shader adds log2(cell)
+   to it. */
+#define HEIGHT_NZ_MIN 0.05f
+
+static float heightLodBases[PLANET_COUNT];
+static const char *planetNormalPaths[PLANET_COUNT] = {
+	"assets/textures/planets/mercuryNormal.png",
+	"assets/textures/planets/venusNormal.png",
+	"assets/textures/planets/earthNormal.jpg",
+	"assets/textures/planets/marsNormal.png",
+	"assets/textures/planets/ceresNormal.png",
+	"assets/textures/planets/jupiterNormal.png",
+	"assets/textures/planets/saturnNormal.png",
+	"assets/textures/planets/uranusNormal.png",
+	"assets/textures/planets/neptuneNormal.png",
+	"assets/textures/planets/plutoNormal.png",
+	"assets/textures/planets/erisNormal.png"};
+
+static GLuint buildHeightFromNormal(const char *path, int index)
 {
-	char *textureStrings[] = {"assets/textures/planets/earthDisplacement.png",
-		"assets/textures/planets/earthDisplacement.png",
-		"assets/textures/planets/earthDisplacement.png",
-		"assets/textures/planets/jupiterDisplacement.png",
-		"assets/textures/planets/jupiterDisplacement.png",
-		"assets/textures/planets/jupiterDisplacement.png",
-		"assets/textures/planets/jupiterDisplacement.png",
-		"assets/textures/planets/jupiterDisplacement.png",
-		"assets/textures/planets/jupiterDisplacement.png",
-		"assets/textures/planets/jupiterDisplacement.png",
-		"assets/textures/planets/jupiterDisplacement.png"};
-	int arraySize = sizeof(textureStrings)/sizeof(textureStrings[0]);
+	int w = 0, h = 0, chan = 0;
+	unsigned char *img = SOIL_load_image(path, &w, &h, &chan, SOIL_LOAD_RGB);
+	if (!img || w < 2 || h < 2) {
+		if (img)
+			SOIL_free_image_data(img);
+		fprintf(stderr, "[trace] heightFromNormal: no pixels for '%s', flat 1x1\n", path);
+		unsigned char mid = 128;
+		GLuint tex;
+		glGenTextures(1, &tex);
+		glBindTexture(GL_TEXTURE_2D, tex);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, 1, 1, 0, GL_RED, GL_UNSIGNED_BYTE, &mid);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		heightLodBases[index] = 0.0f;
+		return tex;
+	}
+
+	int n = w * h;
+	float *hR = (float *)malloc(sizeof(float) * n);  /* row integral */
+	float *hC = (float *)malloc(sizeof(float) * n);  /* column integral */
+	float *slopes = (float *)malloc(sizeof(float) * n);
+
+	for(int i = 0; i < h; i++) {
+		for(int j = 0; j < w; j++) {
+			int p = (i * w + j) * 3;
+			float nx = 2.0f * img[p + 0] / 255.0f - 1.0f;
+			float ny = 2.0f * img[p + 1] / 255.0f - 1.0f;
+			float nz = 2.0f * img[p + 2] / 255.0f - 1.0f;
+			if (nz < HEIGHT_NZ_MIN)
+				nz = HEIGHT_NZ_MIN;
+			hC[i * w + j] = ny / nz;        /* dh/dv, integrated in place below */
+			slopes[i * w + j] = -nx / nz;   /* dh/du, integrated in place below */
+		}
+	}
+	SOIL_free_image_data(img);
+
+	for(int i = 0; i < h; i++) {
+		float acc = 0.0f;
+		for(int j = 0; j < w; j++)
+			hR[i * w + j] = (acc += slopes[i * w + j]);
+		float resid = acc;
+		for(int j = 0; j < w; j++)
+			hR[i * w + j] -= resid * (float)(j + 1) / (float)w;
+	}
+	for(int j = 0; j < w; j++) {
+		float acc = 0.0f;
+		for(int i = 0; i < h; i++)
+			hC[i * w + j] = (acc += hC[i * w + j]);
+	}
+	free(slopes);
+
+	float hmin = 1e30f, hmax = -1e30f;
+	for(int k = 0; k < n; k++) {
+		hR[k] += hC[k];
+		if (hR[k] < hmin) hmin = hR[k];
+		if (hR[k] > hmax) hmax = hR[k];
+	}
+	free(hC);
+
+	float span = hmax - hmin;
+	unsigned char *bytes = (unsigned char *)malloc(n);
+	for(int k = 0; k < n; k++) {
+		float t = (span > 0.0f) ? (hR[k] - hmin) / span : 0.5f;
+		bytes[k] = (unsigned char)(t * 255.0f + 0.5f);
+	}
+	free(hR);
+
+	GLuint tex;
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, w, h, 0, GL_RED, GL_UNSIGNED_BYTE, bytes);
+	glGenerateMipmap(GL_TEXTURE_2D);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+	free(bytes);
+
+	heightLodBases[index] = log2f((float)w / 3.14159265f);
+	return tex;
+}
+
+static int *buildPlanetHeightMaps(void (*step)(void), int planetTexArray[])
+{
+	int arraySize = sizeof(planetNormalPaths)/sizeof(planetNormalPaths[0]);
 	for(int i = 0; i < arraySize; i++)
 	{
-		planetTexArray[i] = loadTexture(textureStrings[i]);
+		planetTexArray[i] = buildHeightFromNormal(planetNormalPaths[i], i);
 		step();
 	}
 	return planetTexArray;
@@ -186,7 +291,7 @@ void Bodies_InitPlanets(void (*step)(void))
 	*planetNormArray = *loadPlanetNormals(step, planetNormArray);
 
 	int planetDisplacementArray[11];
-	*planetDisplacementArray = *loadPlanetDisplacementMap(step, planetDisplacementArray);
+	*planetDisplacementArray = *buildPlanetHeightMaps(step, planetDisplacementArray);
 
 	mercury.radius = 0.4f*planetRadMult; mercury.size = 0.38f*planetScaleMult; mercury.orbit = 0.240846f; mercury.axialTilt = 0.034f; mercury.day = 58.646f; mercury.createAtmosphere = 0; mercury.createRing = 0;
 	mercury.texture = planetTexArray[0]; mercury.normal = planetNormArray[0]; mercury.displacement = planetDisplacementArray[0];
@@ -223,6 +328,17 @@ void Bodies_InitPlanets(void (*step)(void))
 	planetInstanceArray[8] = neptune;
 	planetInstanceArray[9] = pluto;
 	planetInstanceArray[10] = eris;
+
+	/* Vertex-displacement relief, fraction of planet radius. Rocky bodies get
+	   a few percent (aesthetic exaggeration, like the terrain demo); gas
+	   giants stay nearly smooth, their normal maps are cloud detail. */
+	static const float dispScaleTable[PLANET_COUNT] = {
+		0.020f, 0.020f, 0.018f, 0.030f, 0.035f, 0.0035f,
+		0.0035f, 0.0035f, 0.0035f, 0.035f, 0.035f };
+	for (int i = 0; i < PLANET_COUNT; i++) {
+		planetInstanceArray[i].dispScale = dispScaleTable[i];
+		planetInstanceArray[i].dispLodBase = heightLodBases[i];
+	}
 }
 
 void Bodies_InitMoons(void (*step)(void))

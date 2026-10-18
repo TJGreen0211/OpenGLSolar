@@ -31,7 +31,9 @@ typedef struct planetParameters {
 	float ringOuter;
 	GLuint texture;
 	GLuint normal;
-	GLuint displacement;
+	GLuint displacement;   // height map derived from `normal` (vertex displacement)
+	float dispScale;       // vertical exaggeration as a fraction of planet radius
+	float dispLodBase;     // log2(texelWidth/PI): mip for the vertex height fetch
 
 } planetParameters;
 

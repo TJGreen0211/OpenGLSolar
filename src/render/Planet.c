@@ -3,10 +3,13 @@
 #include "Bodies.h"
 #include "Planet.h"
 #include "Camera.h"
+#include "QuadTree.h"
 
 static GLuint planetShader;
 static GLuint planetVAO, planetVBO;
 static int    planetVertexCount;
+static GLint  planetInstancedLoc;
+static GLint  planetDispAmpLoc = -1, planetDispLodLoc = -1;
 
 // World-translation for each planet, written once per frame by Planet_Draw and
 // read by the ring/moon/atmosphere passes (which still sit in Main.c until
@@ -51,12 +54,20 @@ void Planet_InitGL(sphere mesh)
 
 	free(tangent);
 	free(vna);
+
+	// Quad-tree LOD sphere (ported terrain algorithm): six instanced face
+	// grids replace the flat tetrahedron mesh for the planets themselves.
+	planetInstancedLoc = glGetUniformLocation(planetShader, "instanced");
+	planetDispAmpLoc = glGetUniformLocation(planetShader, "dispAmp");
+	planetDispLodLoc = glGetUniformLocation(planetShader, "dispLodBase");
+	QuadTree_InitGL(planetShader);
 }
 
 void Planet_Draw(const ViewMatrices *vm)
 {
 	glUseProgram(planetShader);
 	glSetupPlanetLighting(planetShader);
+	Planet_SetInstanced(1);
 	for(int i = 0; i < PLANET_COUNT; i++)
 	{
 		vec3 translation;
@@ -70,7 +81,6 @@ void Planet_Draw(const ViewMatrices *vm)
 
 		glSetupMVP(planetShader, m, vm, vm->frame);
 
-    	glBindVertexArray (planetVAO);
     	bindTexture(GL_TEXTURE0, Bodies_Planets()[i].texture);
     	bindTexture(GL_TEXTURE1, Bodies_Planets()[i].normal);
     	bindTexture(GL_TEXTURE2, Bodies_Planets()[i].displacement);
@@ -92,9 +102,21 @@ void Planet_Draw(const ViewMatrices *vm)
     	glUniform3f(glGetUniformLocation(planetShader, "C_R"), Bodies_Atmospheres()[i].C_R.x, Bodies_Atmospheres()[i].C_R.y, Bodies_Atmospheres()[i].C_R.z);
     	glUniform3f(glGetUniformLocation(planetShader, "camLocalPos"), camPos.x - translation.x, camPos.y - translation.y, camPos.z - translation.z);
 
-    	glDrawArrays( GL_TRIANGLES, 0, planetVertexCount);
-    	glBindVertexArray(0);
+    	// Height-derived-from-normal-map vertex displacement for this body.
+    	glUniform1f(planetDispAmpLoc, Bodies_Planets()[i].dispScale);
+    	glUniform1f(planetDispLodLoc, Bodies_Planets()[i].dispLodBase);
+
+    	// Instanced cube-face quadtree sphere: one LOD walk + one instanced
+    	// draw per face, subdivided around the camera (QuadTree.c).
+    	QuadTree_DrawSphere(m, Bodies_Planets()[i].size);
     }
+	Planet_SetInstanced(0);
+	glBindVertexArray(0);
+}
+
+void Planet_SetInstanced(int on)
+{
+	glUniform1i(planetInstancedLoc, on);
 }
 
 GLuint Planet_Shader(void)          { return planetShader; }
@@ -104,6 +126,7 @@ const mat4 *Planet_Transforms(void) { return planetTransform; }
 
 void Planet_Shutdown(void)
 {
+	QuadTree_Shutdown();
 	glDeleteVertexArrays(1, &planetVAO);
 	glDeleteBuffers(1, &planetVBO);
 }

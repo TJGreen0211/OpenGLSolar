@@ -40,6 +40,9 @@ float ASPECT = 1400.0f/800.0f;
 sphere planet;
 int keys;
 int actionPress;
+/* T toggles wireframe rendering of the scene geometry (planets, sun, belts,
+   comets, rings, atmosphere shells); the skybox and UI keep fill mode. */
+int wireframeMode = 0;
 
 float zNear = 0.5, zFar = 100000.0;
 
@@ -589,6 +592,10 @@ int main(int argc, char *argv[])
 		}
 
 		Skybox_Draw(skyboxTexture, &appView);
+		/* Wireframe applies to the scene geometry only: the skybox stays
+		   filled (a line cube would ruin the backdrop) and the UI text/
+		   widgets below draw after the mode is restored. */
+		glPolygonMode(GL_FRONT_AND_BACK, wireframeMode ? GL_LINE : GL_FILL);
 		// Opaque sun sphere first: it writes depth, so it occludes any planet
 		// that orbits behind it (a closer planet still draws over the disc).
 		Sun_DrawDisc(&appView);
@@ -602,6 +609,7 @@ int main(int argc, char *argv[])
 		// Corona halo last: additive, no depth write, so it blends over
 		// anything behind it while still being occluded by anything in front.
 		Sun_DrawGlow(&appView);
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
 		/* HUD clock: the current sim date, its offset from J2000, and the
 		   active speed preset (or PAUSED). uiDrawText sets up its own shader
@@ -697,6 +705,9 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     	keys = 0;
     if (key == GLFW_KEY_R && action == GLFW_PRESS){
 		SimTime_TogglePause();
+    }
+    if (key == GLFW_KEY_T && action == GLFW_PRESS){
+		wireframeMode = !wireframeMode;
     }
     // Sim-speed presets: 1 day/sec, 1 week/sec, 1 year/sec.
     if (key == GLFW_KEY_1 && action == GLFW_PRESS){
