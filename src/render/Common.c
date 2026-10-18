@@ -1,6 +1,16 @@
 #include "Common.h"
 #include "LoadShader.h"
+#include "Camera.h"
 #include <stdio.h>
+
+// GL_ARB_texture_filter_anisotropic enums; core-equivalent on every 4.1
+// driver but not guaranteed to be in the glad core header.
+#ifndef GL_TEXTURE_MAX_ANISOTROPY
+#define GL_TEXTURE_MAX_ANISOTROPY 0x84FE
+#endif
+#ifndef GL_MAX_TEXTURE_MAX_ANISOTROPY
+#define GL_MAX_TEXTURE_MAX_ANISOTROPY 0x84FF
+#endif
 
 //GLfloat deltaTime = 0.0f;
 //GLfloat lastFrame = 0.0f;
@@ -72,11 +82,18 @@ GLuint loadTexture(char const * path)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, image);
     glGenerateMipmap(GL_TEXTURE_2D);
 
-    // Parameters
+    // Parameters. Trilinear minification (the mips generated above are only
+    // useful if the min filter uses them; an old GL_LINEAR override here made
+    // every minified texture -- especially the normal maps -- shimmer).
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    float maxAniso = 0.0f;
+    glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &maxAniso);
+    if (maxAniso > 1.0f)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY,
+                        maxAniso < 8.0f ? maxAniso : 8.0f);
     glBindTexture(GL_TEXTURE_2D, 0);
     SOIL_free_image_data(image);
     return textureID;
@@ -126,13 +143,16 @@ vec4 glGetLightPosition(void)
 
 void glSetupPlanetLighting(GLuint program)
 {
-    vec4 light_ambient = {0.2f, 0.2f, 0.2f, 1.0f};
+    // Direct sun light: neutral dim ambient (no blue tint wash), white
+    // diffuse, and a dielectric land F0 for the per-fragment Fresnel specular
+    // in planet.frag (specularProduct is the base F0, not an add-on level).
+    vec4 light_ambient = {0.05f, 0.05f, 0.05f, 1.0f};
     vec4 light_diffuse = {1.0f, 1.0f, 1.0f, 1.0f};
     vec4 light_specular = {1.0f, 1.0f, 1.0f, 1.0f};
 
-    vec4 material_ambient = {0.2f, 0.2f, 1.0f, 1.0f};
+    vec4 material_ambient = {1.0f, 1.0f, 1.0f, 1.0f};
     vec4 material_diffuse = {0.8f, 0.8f, 0.8f, 1.0f};
-    vec4 material_specular = {0.5f, 0.5f, 0.5f, 1.0f};
+    vec4 material_specular = {0.03f, 0.03f, 0.03f, 1.0f};
 
     vec4 light_position = glGetLightPosition();
     float material_shininess = 50.0f;
@@ -146,6 +166,10 @@ void glSetupPlanetLighting(GLuint program)
     glUniform4fv( glGetUniformLocation(program, "specularProduct"), 1, (float*)(&specular_product) );
 	glUniform4fv( glGetUniformLocation(program, "lightPos"), 1, (float*)(&light_position) );
 	glUniform1f ( glGetUniformLocation(program, "shininess"), material_shininess );
+
+	// World-space camera for the per-fragment view vector in planet.frag.
+	vec3 cam = getCameraPosition();
+	glUniform3f( glGetUniformLocation(program, "camPos"), cam.x, cam.y, cam.z );
 }
 
 // Deterministic shared LCG (same constants as the old beltRand). Belts and

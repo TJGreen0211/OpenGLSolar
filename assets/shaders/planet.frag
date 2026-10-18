@@ -1,19 +1,27 @@
 #version 410
 
+// Per-fragment lighting: the world-space tangent basis and world position are
+// interpolated from planet.vert, and L/V/H are built here, so the specular
+// response no longer depends on mesh or quad-tree patch density.
+
+in vec3 fT;
+in vec3 fB;
 in vec3 fN;
-in vec3 fL;
-in vec3 fE;
-in vec3 fH;
+in vec3 vWorldPos;
 in vec4 TexCoords;
 in vec3 vLocalPos;
 out vec4 FragColor;
 
 uniform vec4 ambientProduct, diffuseProduct, specularProduct;
-uniform float shininess;
+uniform vec4 lightPos;   // world space; w != 0 -> positional, w == 0 -> dir
+uniform vec3 camPos;     // world space
+uniform float shininess; // base (land) lobe exponent
+// 1 on bodies with real oceans (Earth): blue-dominant albedo pixels get a
+// water F0 and a much tighter specular lobe. 0 everywhere else.
+uniform float waterSpec;
 
 uniform sampler2D tex;
 uniform sampler2D normalTex;
-uniform sampler2D depthMap;
 
 // Atmospheric extinction (out-scattering): the body's own atmosphere dims the
 // surface by the transmittance along the surface->camera path through the
@@ -30,8 +38,6 @@ const float MAX = 10000.0;
 const float K_R = 0.166;
 const float K_M = 0.0025;
 const int NUM_EXTINCT_STEPS = 5;
-
-float height_scale = 0.02;
 
 vec2 shellIntersection(vec3 p, vec3 dir, float radius)
 {
@@ -81,45 +87,67 @@ vec3 atmosphericExtinction()
 	return exp(-(K_R * C_R + K_M) * tau);
 }
 
-vec2 parallaxMapping(vec2 texCoords)
-{
-	float height = texture(depthMap, texCoords).r;
-	vec2 p = fE.xy / fE.z * (height * height_scale);
-	// fE is the camera -> fragment direction, so the visible point is
-	// displaced towards the camera: offset is added, not subtracted
-	return texCoords + p;
-}
-
 void main()
 {
 	vec3 pos = normalize(TexCoords.xyz);
 	vec2 longlat = vec2((atan(pos.y, pos.x) / 3.1415926 + 1.0) * 0.5,
-                                  (asin(clamp(pos.z, -1.0, 1.0)) / 3.1415926 + 0.5));
-    vec2 D = parallaxMapping(longlat);
-    // sample color and normal at the same (parallaxed) coordinates
-    vec3 color = vec3(texture(tex, D));
-    vec3 N = 2.0*vec3(texture(normalTex, D))-1.0;
-    
-    N = normalize(N);
-    
-    float Kd = max(dot(fL, N), 0.0);
-    float Ks = pow(max(dot(N, fH), 0.0), shininess);
-    
-    vec3 ambient = ambientProduct.xyz * color;
-    vec3 diffuse = Kd * diffuseProduct.xyz * color;
-    vec3 specular = Ks * specularProduct.xyz;
+	                           (asin(clamp(pos.z, -1.0, 1.0)) / 3.1415926 + 0.5));
+	vec3 color = vec3(texture(tex, longlat));
+	vec3 detail = 2.0 * vec3(texture(normalTex, longlat)) - 1.0;
 
-    // discard the specular highlight if the light's behind the vertex
-    if( dot(fL, N) < 0.0 ) {
-		specular = vec3(0.0, 0.0, 0.0);
-    }
-    
-    FragColor = vec4(ambient + diffuse + specular, 1.0);
+	// Normal fade: once the surface minifies past a texel per screen pixel,
+	// scale the tangent-space slopes toward flat so minified normal detail
+	// stops shimmering. mipLevel is the texel footprint (in texels) covered by
+	// one screen pixel.
+	vec2 texDim = vec2(textureSize(normalTex, 0));
+	vec2 mipFootprint = abs(vec2(fwidth(longlat.x), fwidth(longlat.y)) * texDim);
+	float spread = max(max(mipFootprint.x, mipFootprint.y), 1.0);
+	detail.xy /= spread;
+	detail = normalize(detail);
 
-    // out-scattering: the dome pass adds the in-scattered sky on top of this
-    // (its ray is clipped at the surface), so the surface itself is only
-    // attenuated here -- no double counting, inside or outside the shell
-    if (hasAtmosphere > 0.5) {
-        FragColor.rgb *= atmosphericExtinction();
-    }
+	// Tangent -> world. Re-orthogonalise T against the interpolated N so the
+	// basis stays orthonormal despite interpolation.
+	vec3 T = normalize(fT);
+	vec3 baseN = normalize(fN);
+	T = normalize(T - dot(T, baseN) * baseN);
+	vec3 B = cross(baseN, T);
+	vec3 N = normalize(detail.x * T + detail.y * B + detail.z * baseN);
+
+	// Half-Anglet convention: V points fragment -> camera (toward the viewer)
+	// so that H = normalize(L + V) is the true half vector of the specular
+	// lobe. (The old vertex shader used camera -> fragment and subtracted.)
+	vec3 V = normalize(camPos - vWorldPos);
+	vec3 L = (lightPos.w != 0.0) ? normalize(lightPos.xyz - vWorldPos)
+	                             : normalize(lightPos.xyz);
+
+	float NdotL = max(dot(N, L), 0.0);
+	vec3 H = normalize(L + V);
+	float NdotH = max(dot(N, H), 0.0);
+	float VdotH = max(dot(V, H), 0.0);
+
+	// Specular: land is a dim dielectric (specularProduct ~ F0 of rock); on
+	// ocean-bearing bodies, blue-dominant pixels become water (F0 ~ 0.05,
+	// tight lobe). Fresnel keeps the highlight physically scaled: near zero
+	// head-on, rising toward grazing, and zero on the night side via NdotL.
+	float ocean = smoothstep(0.02, 0.15, color.b - max(color.r, color.g)) * waterSpec;
+	vec3 f0 = mix(specularProduct.rgb, vec3(0.05), ocean);
+	float shin = mix(shininess, 400.0, ocean);
+	vec3 fresnel = f0 + (vec3(1.0) - f0) * pow(1.0 - VdotH, 5.0);
+	float specularNorm = (shin + 8.0) / (8.0 * PI);
+
+	vec3 ambient = ambientProduct.rgb * color;
+	vec3 diffuse = NdotL * diffuseProduct.rgb * color;
+	vec3 specular = vec3(0.0);
+	if (dot(N, L) > 0.0) {
+		specular = fresnel * specularNorm * pow(NdotH, shin);
+	}
+
+	FragColor = vec4(ambient + diffuse + specular, 1.0);
+
+	// out-scattering: the dome pass adds the in-scattered sky on top of this
+	// (its ray is clipped at the surface), so the surface itself is only
+	// attenuated here -- no double counting, inside or outside the shell
+	if (hasAtmosphere > 0.5) {
+		FragColor.rgb *= atmosphericExtinction();
+	}
 }

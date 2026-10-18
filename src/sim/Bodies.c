@@ -263,8 +263,8 @@ static int fileExists(const char *path)
 
 // Moons have no per-moon normal or displacement maps on disk. A neutral
 // tangent-space normal keeps shading plain (loadTexture's black 1x1 fallback
-// would remap to N = (-1,-1,-1)), and a black 1x1 displacement keeps the
-// planet shader's parallax step a no-op.
+// would remap to N = (-1,-1,-1)), and a black 1x1 displacement is a safe
+// height source for the (moon-inactive) vertex-displacement fetch.
 static GLuint createNeutralNormalTexture()
 {
 	unsigned char px[3] = {128, 128, 255};
@@ -329,12 +329,15 @@ void Bodies_InitPlanets(void (*step)(void))
 	planetInstanceArray[9] = pluto;
 	planetInstanceArray[10] = eris;
 
-	/* Vertex-displacement relief, fraction of planet radius. Rocky bodies get
-	   a few percent (aesthetic exaggeration, like the terrain demo); gas
-	   giants stay nearly smooth, their normal maps are cloud detail. */
+	/* Vertex-displacement relief, fraction of planet radius. The height map is
+	   derived by integrating the normal map, whose integration drift adds
+	   broad low-frequency wrinkles on top of the real detail, so relief stays
+	   at the per-mille level; large values crumple the whole body (oceans
+	   included) into a wet-foil silhouette. Gas giants stay flat: their normal
+	   maps are cloud detail. */
 	static const float dispScaleTable[PLANET_COUNT] = {
-		0.020f, 0.020f, 0.018f, 0.030f, 0.035f, 0.0035f,
-		0.0035f, 0.0035f, 0.0035f, 0.035f, 0.035f };
+		0.004f, 0.004f, 0.003f, 0.005f, 0.006f, 0.001f,
+		0.001f, 0.001f, 0.001f, 0.005f, 0.005f };
 	for (int i = 0; i < PLANET_COUNT; i++) {
 		planetInstanceArray[i].dispScale = dispScaleTable[i];
 		planetInstanceArray[i].dispLodBase = heightLodBases[i];

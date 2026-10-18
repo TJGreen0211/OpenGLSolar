@@ -17,6 +17,12 @@ static GLint  planetDispAmpLoc = -1, planetDispLodLoc = -1;
 // the centres.
 static mat4   planetTransform[PLANET_COUNT];
 
+// Bodies with real oceans get the water-specular treatment in planet.frag
+// (blue-dominant albedo -> F0 0.05, tight glint lobe). Everything else is
+// matte rock/cloud.
+static const float planetWaterSpec[PLANET_COUNT] = {
+	0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+
 void Planet_InitGL(sphere mesh)
 {
 	createShader(&planetShader, "assets/shaders/planet.vert",
@@ -86,7 +92,8 @@ void Planet_Draw(const ViewMatrices *vm)
     	bindTexture(GL_TEXTURE2, Bodies_Planets()[i].displacement);
     	glUniform1i(glGetUniformLocation(planetShader, "tex"), 0);
     	glUniform1i(glGetUniformLocation(planetShader, "normalTex"), 1);
-		glUniform1i(glGetUniformLocation(planetShader, "depthMap"), 2);
+    	glUniform1i(glGetUniformLocation(planetShader, "depthMap"), 2);
+    	glUniform1f(glGetUniformLocation(planetShader, "waterSpec"), planetWaterSpec[i]);
     	glUniformMatrix4fv( glGetUniformLocation(planetShader, "translation" ), 1, GL_FALSE, &matT.m[0][0] );
 
     	// Atmospheric extinction for this body's own shell (matches the

@@ -13,6 +13,7 @@ void Moon_Draw(const ViewMatrices *vm)
 	// instanced mode so the plain tetrahedron mesh draws without the
 	// quad-tree instance transform.
 	glUniform1f(glGetUniformLocation(Planet_Shader(), "hasAtmosphere"), 0.0f);
+	glUniform1f(glGetUniformLocation(Planet_Shader(), "waterSpec"), 0.0f);
 	Planet_SetInstanced(0);
 	int c = 0;
 	for(int i = 0; i < 11; i++)

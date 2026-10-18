@@ -12,7 +12,9 @@
 
 #define QT_INSTANCE_CAP 8192
 #define QT_DIVISIONS 10
-#define QT_FACE_VERTS (QT_DIVISIONS * QT_DIVISIONS * 6)
+/* Surface cells + outer boundary skirt (4 edges x QT_DIVISIONS segments x 6
+   wall verts), kept in sync with buildFaceGrid. */
+#define QT_FACE_VERTS (QT_DIVISIONS * QT_DIVISIONS * 6 + 4 * QT_DIVISIONS * 6)
 
 /* Terrain drew at planet radius 30 with a first split distance of 128; keep
    the same screen-space behaviour by scaling the start distance with radius. */
@@ -82,9 +84,27 @@ static vec3 sphereCenter(mat4 model, vec3 plocal) {
 	return c;
 }
 
+/* Point at grid indices (u, v), each in [0, QT_DIVISIONS], on the grid plane:
+   u runs along the inner-scroll axis, v along the outer one, using the same
+   start/offset rules as the cell loop below. */
+static vec4 boundaryPoint(int grid, int u, int v) {
+	float offset = 2.0f / (float)QT_DIVISIONS;
+	float su = 1.0f - offset*(float)u;
+	float sv = 1.0f - offset*(float)v;
+	vec4 p;
+	if(grid == 0) { p.x = su; p.y = sv; p.z = -1.0f; }
+	else if(grid == 1) { p.x = su; p.y = 1.0f; p.z = sv; }
+	else { p.x = 1.0f; p.y = sv; p.z = su; }
+	p.w = 0.0f;
+	return p;
+}
+
 /* Face grid vertices (port of the terrain initSubQuadX/Y/Z builders, minus
-   the texture/tangent streams the planet shader does not consume). */
-static int buildFaceGrid(int grid, int reverseOrder, vec3 *out) {
+   the texture/tangent streams the planet shader does not consume). Positions
+   are vec4: w is a skirt flag (0 = surface, 1 = wall) that planet.vert uses to
+   push duplicated boundary vertices below the surface, hiding height
+   mismatches along patch edges. */
+static int buildFaceGrid(int grid, int reverseOrder, vec4 *out) {
 	int order[6];
 	if(reverseOrder) {
 		order[0] = 2; order[1] = 1; order[2] = 0; order[3] = 1; order[4] = 3; order[5] = 0;
@@ -124,8 +144,12 @@ static int buildFaceGrid(int grid, int reverseOrder, vec3 *out) {
 				face[2].x = start.x; face[2].y = start.y-offset; face[2].z = start.z;
 				face[3].x = start.x; face[3].y = start.y; face[3].z = start.z-offset;
 			}
-			for(int k = 0; k < 6; k++)
-				out[index++] = face[order[k]];
+			for(int k = 0; k < 6; k++) {
+				vec3 v = face[order[k]];
+				out[index].x = v.x; out[index].y = v.y; out[index].z = v.z;
+				out[index].w = 0.0f;
+				index++;
+			}
 
 			/* Inner loop scrolls the columns; outer loop (below) the rows. */
 			if(grid == 2) start.z -= offset;
@@ -133,6 +157,35 @@ static int buildFaceGrid(int grid, int reverseOrder, vec3 *out) {
 		}
 		if(grid == 1) start.z -= offset;
 		else start.y -= offset;
+	}
+
+	/* Boundary skirt: walk the grid perimeter once and duplicate each boundary
+	   point as a wall vertex (same plane coords, w = 1); the vertex shader
+	   pulls the wall ring radially below the lowest possible displaced
+	   surface, so the wall hides T-junction and mip mismatches at every patch
+	   edge. Culling is off in this pass, so the winding is irrelevant and the
+	   same order serves both front/back grids. */
+	static const int edgeStart[4][2] = {
+		{0, 0}, {QT_DIVISIONS, 0}, {QT_DIVISIONS, QT_DIVISIONS}, {0, QT_DIVISIONS}
+	};
+	static const int edgeStep[4][2] = {
+		{1, 0}, {0, 1}, {-1, 0}, {0, -1}
+	};
+	for(int e = 0; e < 4; e++) {
+		for(int s = 0; s < QT_DIVISIONS; s++) {
+			vec4 b0 = boundaryPoint(grid, edgeStart[e][0] + edgeStep[e][0]*s,
+			                         edgeStart[e][1] + edgeStep[e][1]*s);
+			vec4 b1 = boundaryPoint(grid, edgeStart[e][0] + edgeStep[e][0]*(s+1),
+			                         edgeStart[e][1] + edgeStep[e][1]*(s+1));
+			vec4 s0 = b0; s0.w = 1.0f;
+			vec4 s1 = b1; s1.w = 1.0f;
+			out[index++] = b0;
+			out[index++] = b1;
+			out[index++] = s0;
+			out[index++] = s0;
+			out[index++] = b1;
+			out[index++] = s1;
+		}
 	}
 	return index;
 }
@@ -146,7 +199,7 @@ void QuadTree_InitGL(GLuint shader)
 	glBufferData(GL_ARRAY_BUFFER, sizeof(mat4)*QT_INSTANCE_CAP, NULL, GL_DYNAMIC_DRAW);
 
 	for(int f = 0; f < 6; f++) {
-		vec3 verts[QT_FACE_VERTS];
+		vec4 verts[QT_FACE_VERTS];
 		buildFaceGrid(faceGrid[f], faceReverse[f], verts);
 
 		glGenVertexArrays(1, &faceVAO[f]);
@@ -156,7 +209,9 @@ void QuadTree_InitGL(GLuint shader)
 		glBindBuffer(GL_ARRAY_BUFFER, faceVBO[f]);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
 		glEnableVertexAttribArray(vPosition);
-		glVertexAttribPointer(vPosition, 3, GL_FLOAT, GL_FALSE, sizeof(vec3), BUFFER_OFFSET(0));
+		/* vec4 positions: w carries the skirt flag (moon's planetVAO keeps a
+		   3-float attribute, where w defaults to 1 but is never read). */
+		glVertexAttribPointer(vPosition, 4, GL_FLOAT, GL_FALSE, 4*sizeof(float), BUFFER_OFFSET(0));
 
 		/* mat4 instance transform in attributes 4..7 (quad.vert layout). */
 		glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
@@ -253,12 +308,12 @@ void QuadTree_DrawSphere(mat4 model, float radius)
 	vec3 camPos = getCameraPosition();
 	float level0 = radius * QT_LEVEL_PER_RADIUS;
 
-	/* The face grids wind outward but clockwise in screen space (terrain
-	   convention): the visible near hemisphere classifies as back-facing, so
-	   cull the far hemisphere with the FRONT faces while drawing, then hand
-	   the normal GL_BACK state back to the rest of the frame. */
-	glEnable(GL_CULL_FACE);
-	glCullFace(GL_FRONT);
+	/* Patch skirts must render double-sided, so culling is off entirely for
+	   this pass and the depth buffer resolves the near/far hemispheres (the
+	   planets pass is opaque). Wireframe therefore also shows the far
+	   hemisphere's grid and walls. Hand the normal GL_BACK state back to the
+	   rest of the frame afterwards. */
+	glDisable(GL_CULL_FACE);
 
 	for(int f = 0; f < 6; f++) {
 		int count = traverseFace(model, faceOrder[f], faceNegate[f], camPos, level0);
