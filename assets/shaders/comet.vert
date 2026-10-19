@@ -9,6 +9,7 @@ uniform mat4 projection;
 
 out vec3 fWorldPos;
 out vec3 fNormal;
+out float fViewDist;   // view-space distance ahead of the camera
 
 void main()
 {
@@ -20,4 +21,5 @@ void main()
 	// the old guard (see belt.vert) flipped the lit side away from the sun.
 	// Row-vector chain, as in planet.vert.
 	gl_Position = wp * view * projection;
+	fViewDist = gl_Position.w;
 }

@@ -26,7 +26,7 @@ if not exist build\obj mkdir build\obj
 cl /nologo /W3 /O2 /MD /DWIN32 /DNOMINMAX /D_CRT_SECURE_NO_WARNINGS ^
   /Isrc /Isrc\render /Isrc\sim /Isrc\ui /Isrc\geometry /I"third_party\soil\src" /I"%GLFW_ROOT%\include" /I"%GLAD_ROOT%\include" ^
   /Fobuild\obj\ /Fesolarsystem.exe ^
-  src\Main.c src\render\Common.c src\render\LoadShader.c src\render\LoadingScreen.c src\render\Belt.c src\render\Comet.c src\render\Skybox.c src\render\Sun.c src\render\Orbits.c src\render\Planet.c src\render\Rings.c src\render\Moon.c src\render\Atmosphere.c src\sim\SimTime.c src\sim\Bodies.c src\ui\GUI.c src\geometry\LinearAlg.c src\ui\Camera.c src\geometry\Sphere.c src\geometry\Geometry.c src\geometry\Obj.c ^
+  src\Main.c src\render\Common.c src\render\LoadShader.c src\render\LoadingScreen.c src\render\Belt.c src\render\Comet.c src\render\Skybox.c src\render\Sun.c src\render\Orbits.c src\render\Planet.c src\render\Rings.c src\render\Moon.c src\render\Atmosphere.c src\sim\SimTime.c src\sim\Bodies.c src\ui\GUI.c src\geometry\LinearAlg.c src\ui\Camera.c src\geometry\Sphere.c src\geometry\Geometry.c src\geometry\Obj.c src\geometry\QuadTree.c ^
   "%GLAD_ROOT%\src\gl.c" "third_party\soil\src\SOIL.c" "third_party\soil\src\stb_image_aug.c" "third_party\soil\src\image_helper.c" "third_party\soil\src\image_DXT.c" ^
   /link /LIBPATH:"%GLFW_ROOT%\lib-vc2022" glfw3dll.lib opengl32.lib gdi32.lib user32.lib shell32.lib winmm.lib
 if errorlevel 1 (

@@ -5,7 +5,7 @@
 static comet comets[COMET_COUNT];
 static GLuint cometShader, tailShader;
 
-static void updateComet(comet *c, float dDays);
+static void updateComet(comet *c, double dDays);
 
 void Comet_InitGL(void)
 {
@@ -24,16 +24,18 @@ void Comet_InitGL(void)
 	// of PI, i.e. a fraction of the half orbit) so the three arrive at
 	// different intervals, and kMult sets each orbit's tempo so they never
 	// re-sync into a lockstep pass.
-	// Perihelion distance q: kept close to the sun (glow is 3000) so the pass
+	// Perihelion distance q: kept close to the sun (glow is 3e6) so the pass
 	// visibly dives into the sun. Each perihelion keeps z>0 (in front of the
-	// sun, between it and the default camera at z=5000) so it is seen crossing
-	// the sun's face rather than hidden behind it.
-	static const float seedQ[]  = { 1500.0f, 2600.0f, 3400.0f };
+	// sun, between it and the default camera at z=5e6) so it is seen crossing
+	// the sun's face rather than hidden behind it. Distances are in the 1000x
+	// scene scale.
+	static const float seedQ[]  = { 1500000.0f, 2600000.0f, 3400000.0f };
 	// Aphelion distance rA: arcs far out into the system (the Kuiper belt
-	// draws at 35000..95000 and the far plane is 100000), then returns on the
-	// closed ellipse. Larger rA = more eccentric, longer hidden far stretch.
-	static const float seedRA[] = { 46000.0f, 38000.0f, 58000.0f };
-	// Perihelion world angle. z = q*sin(dir) stays in (0, 5000):
+	// draws at 3.5e7..9.5e7; the far plane is dynamic and always bounds the
+	// system), then returns on the closed ellipse. Larger rA = more eccentric,
+	// longer hidden far stretch.
+	static const float seedRA[] = { 46000000.0f, 38000000.0f, 58000000.0f };
+	// Perihelion world angle. z = q*sin(dir) stays in (0, 5e6):
 	//   #0 right  (1336, 705)   #1 left   (-2256, 1756)   #2 right (3205, 1166)
 	static const float seedDir[]   = {   0.5f,   2.4f,     0.35f  };
 	static const float seedPhase[] = {  0.80f,  0.30f,  -0.45f };
@@ -124,38 +126,41 @@ void Comet_InitGL(void)
 	}
 }
 
-static void updateComet(comet *c, float dDays)
+static void updateComet(comet *c, double dDays)
 {
 	// Ellipse, sun at the focus (origin): r = p / (1 + e cos theta), with
-	// perihelion at theta = 0 and aphelion at theta = +/-PI. Advance theta by
+	// perihelion at theta = 0 and aphelion at +/-PI. Advance theta by
 	// (K / r^2) * dDays, where K (c->orbitK) is in rad per simulated day:
 	// equal-area-in-equal-time, so it whips around perihelion and crawls far
 	// out, like a real comet, at a pace tied to the sim clock. dDays is the
 	// sim-days stepped this frame (updateBodies), so a pause steps it by 0.
+	// The anomaly integrates in double: at scaled-up orbits the frame steps
+	// are small against the accumulated angle, and float would swallow them.
 	// The whole conic is rotated by c->dir so perihelion points along a chosen
 	// world direction (kept near the default camera's line of sight).
-	float ang = c->theta + c->dir;
-	float r = c->p / (1.0f + c->e * cosf(c->theta));
-	float dTheta = c->orbitK / (r * r);
+	double r = (double)c->p / (1.0 + (double)c->e * cos(c->theta));
+	double dTheta = c->orbitK / (r * r);
 	c->theta -= dTheta * dDays;
-	if(c->theta < -3.14159265358979f)
-		c->theta += 6.28318530717959f; // wrap at aphelion: same point, no visible reset
-	c->spin += 0.005f * OLD_TICKS_PER_DAY * dDays;
+	if(c->theta < -3.14159265358979)
+		c->theta += 6.28318530717959; // wrap at aphelion: same point, no visible reset
+	c->spin += 0.005 * OLD_TICKS_PER_DAY * dDays;
+	if(c->spin > 6.28318530717959)
+		c->spin -= 6.28318530717959 * floor(c->spin / 6.28318530717959);
 
-	ang = c->theta + c->dir;
-	r = c->p / (1.0f + c->e * cosf(c->theta));
+	double ang = c->theta + (double)c->dir;
+	r = (double)c->p / (1.0 + (double)c->e * cos(c->theta));
 	c->r = r;
-	c->pos.x = r * cosf(ang);
-	c->pos.y = 0.0f;
-	c->pos.z = r * sinf(ang);
+	c->pos.x = r * cos(ang);
+	c->pos.y = 0.0;
+	c->pos.z = r * sin(ang);
 
 	// Tail: anti-sunward (the sun is at the origin), length and brightness
 	// both proportional to 1/r^2, peaking at perihelion.
-	c->tailDir.x = c->pos.x / r;
-	c->tailDir.y = c->pos.y / r;
-	c->tailDir.z = c->pos.z / r;
-	float q = c->q;
-	float falloff = (q / r) * (q / r);
+	c->tailDir.x = (float)(c->pos.x / r);
+	c->tailDir.y = (float)(c->pos.y / r);
+	c->tailDir.z = (float)(c->pos.z / r);
+	double q = (double)c->q;
+	float falloff = (float)((q / r) * (q / r));
 	c->tailLen = COMET_TAIL_MAX * falloff;
 	c->tailWidth = 0.18f * c->tailLen;
 	c->tailAlpha = falloff;
@@ -164,13 +169,13 @@ static void updateComet(comet *c, float dDays)
 	// perihelion distance q, smoothly faded to 0 beyond COMET_VIS_FAR * q.
 	// The slow far-out crawl happens while invisible, so only the fast,
 	// bright close pass is seen.
-	float rFar = COMET_VIS_FAR * q;
-	float t = (rFar - r) / (rFar - q);
-	t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
-	c->vis = t * t * (3.0f - 2.0f * t);
+	double rFar = COMET_VIS_FAR * q;
+	double t = (rFar - r) / (rFar - q);
+	t = t < 0.0 ? 0.0 : (t > 1.0 ? 1.0 : t);
+	c->vis = (float)(t * t * (3.0 - 2.0 * t));
 }
 
-void Comet_UpdateAll(float dDays)
+void Comet_UpdateAll(double dDays)
 {
 	for(int ci = 0; ci < COMET_COUNT; ci++)
 		updateComet(&comets[ci], dDays);
@@ -187,7 +192,10 @@ void Comet_Draw(const ViewMatrices *vm)
 	// Nucleus: alpha-faded by the pass-end window (uFade), writes depth.
 	glUseProgram(cometShader);
 	glUniform1f(glGetUniformLocation(cometShader, "uFade"), c->vis);
-	mat4 m = multiplymat4(multiplymat4(translatevec3(c->pos), rotateY(c->spin)),
+	glUploadSunPos(cometShader);
+	dvec3 cam = getCameraPosition();
+	vec3 nucleusRel = dvec3tovec3(dsubvec3(c->pos, cam));
+	mat4 m = multiplymat4(multiplymat4(translatevec3(nucleusRel), rotateY((float)c->spin)),
 		scale(COMET_NUCLEUS_SCALE));
 	glSetupMVP(cometShader, m, vm, vm->frame);
 	glBindVertexArray(c->vao);
@@ -201,13 +209,14 @@ void Comet_Draw(const ViewMatrices *vm)
 	// hides it, but no depth write so the sky behind stays visible.
 	glUseProgram(tailShader);
 	{
-		float r = c->r > 0.0f ? c->r : 1.0f;
-		float falloff = (c->q / r) * (c->q / r);
+		double r = c->r > 0.0 ? c->r : 1.0;
+		float falloff = (float)((c->q / r) * (c->q / r));
 		glUniformMatrix4fv(glGetUniformLocation(tailShader, "projection"), 1, GL_FALSE, &vm->proj.m[0][0]);
 		glUniformMatrix4fv(glGetUniformLocation(tailShader, "view"), 1, GL_FALSE, &vm->view.m[0][0]);
-		glUniform3f(glGetUniformLocation(tailShader, "uNucleus"), c->pos.x, c->pos.y, c->pos.z);
+		glUploadLogDepth(tailShader);
+		glUniform3f(glGetUniformLocation(tailShader, "uNucleus"), nucleusRel.x, nucleusRel.y, nucleusRel.z);
 		glUniform3f(glGetUniformLocation(tailShader, "uTailDir"),
-			c->pos.x / r, c->pos.y / r, c->pos.z / r);
+			(float)(c->pos.x / r), (float)(c->pos.y / r), (float)(c->pos.z / r));
 		glUniform1f(glGetUniformLocation(tailShader, "uTailLen"), COMET_TAIL_MAX * falloff);
 		glUniform1f(glGetUniformLocation(tailShader, "uTailWidth"), 0.18f * COMET_TAIL_MAX * falloff);
 		glUniform1f(glGetUniformLocation(tailShader, "uTailAlpha"), falloff * c->vis);

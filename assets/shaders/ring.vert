@@ -8,6 +8,7 @@ out vec3 fWorldPos;
 out vec3 fNormal;
 out vec2 fTexCoord;
 out vec3 fCamPos;
+out float fViewDist;   // view-space distance ahead of the camera
 
 uniform mat4 model;
 uniform mat4 view;
@@ -16,6 +17,7 @@ uniform mat4 projection;
 void main()
 {
 	gl_Position = vPosition*model*view*projection;
+	fViewDist = gl_Position.w;
 	mat3 normalMatrix = transpose(inverse(mat3(model)));
 
 	fWorldPos = (vPosition*model).xyz;

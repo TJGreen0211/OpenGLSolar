@@ -157,6 +157,9 @@ void Rings_Draw(const ViewMatrices *vm)
 			glUniform3f(glGetUniformLocation(ringShader, "planetCenter"),
 				modelmat.m[0][3], modelmat.m[1][3], modelmat.m[2][3]);
 			glUniform1f(glGetUniformLocation(ringShader, "planetRadius"), Bodies_Planets()[i].size);
+			// Sun at the universe origin: relative position for the camera-
+			// relative lighting and shadow-ray in ring.frag.
+			glUploadSunPos(ringShader);
 
 			glBindVertexArray(ringVAO[i]);
 			bindTexture(GL_TEXTURE0, ringTex[i]);

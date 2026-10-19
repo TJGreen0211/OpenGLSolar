@@ -4,11 +4,14 @@ in vec3 fWorldPos;
 in vec3 fNormal;
 in vec2 fTexCoord;
 in vec3 fCamPos;
+in float fViewDist;
 
 out vec4 FragColor;
 
+uniform vec2 uLogDepth; // log2(near), log2(far)-log2(near): see Common.c
 uniform sampler2D tex;
-uniform vec3 planetCenter;
+uniform vec3 planetCenter;   // camera-relative planet centre
+uniform vec3 uSunPos;        // camera-relative sun (universe origin)
 uniform float planetRadius;
 
 void main()
@@ -23,9 +26,9 @@ void main()
 	if(dot(N, V) < 0.0)
 		N = -N;
 
-	// The sun sits at the origin of the system: rings brighten when the
-	// sun is high above the ring plane (planet seasons)
-	vec3 L = normalize(-fWorldPos);
+	// Sun (camera-relative): rings brighten when the sun is high above the
+	// ring plane (planet seasons)
+	vec3 L = normalize(uSunPos - fWorldPos);
 	float light = 0.55 + 0.45*max(dot(N, L), 0.0);
 
 	// Planet shadow: does the ray from this fragment to the sun pass
@@ -42,4 +45,8 @@ void main()
 	}
 
 	FragColor = vec4(ringColor.rgb*light*shadow, ringColor.a);
+	// Depth-tested but not depth-writing (CPU side): the test value must
+	// still be in the log-depth scale everything else uses.
+	gl_FragDepth = clamp((log2(max(fViewDist, 0.0001)) - uLogDepth.x) / uLogDepth.y,
+	                     0.0, 1.0);
 }

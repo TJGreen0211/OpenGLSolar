@@ -19,7 +19,9 @@ typedef struct moonParameters {
 } moonParameters;
 
 typedef struct planetParameters {
-	float radius;
+	double radius;       // orbit radius, double: positions are computed in
+	                     // double and only the camera-relative difference is
+	                     // downcast (floating-origin rendering)
 	float size;
 	float orbit;
 	float axialTilt;
@@ -63,9 +65,11 @@ float Bodies_MoonOrbitSpeed(int i);
 // Shared black 1x1 map the moon draw binds for the parallax step (a no-op).
 GLuint Bodies_MoonDisplacementTexture(void);
 
-// World-space centre, the same formula the per-frame draw uses.
-vec3 Bodies_PlanetWorldPosition(int i);
-vec3 Bodies_MoonWorldPosition(int m);
+// World-space centre, the same formula the per-frame draw uses. Absolute
+// double universe coordinates: subtract the camera in double before
+// downcasting for the GPU.
+dvec3 Bodies_PlanetWorldPosition(int i);
+dvec3 Bodies_MoonWorldPosition(int m);
 
 // Build the data tables. `step` advances the loading screen once per texture
 // decode; it is passed in so sim stays free of a loading-screen dependency.

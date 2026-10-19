@@ -4,24 +4,29 @@ uniform vec3 camPosition;
 uniform vec3 C_R;
 uniform float E;
 uniform vec4 lightPos;
+uniform vec3 shellCenter;   // camera-relative body centre (shell sphere origin)
+uniform vec2 uLogDepth;     // log2(near), log2(far)-log2(near): see Common.c
 
 uniform float fInnerRadius;
 uniform float fOuterRadius;
 
-in vec4 fWorldPos;
 in vec3 fLocalPos;
+in float fViewDist;
 
 out vec4 FragColor;
 
 const float PI = 3.14159265359;
-const float MAX = 10000.0;
+// Intersection miss sentinel must exceed the whole scaled scene. The
+// atmosphere shells can be millions of world units across.
+const float MAX = 1e30;
 
 const float K_R = 0.166;//Rayleigh constant > thicker
 const float K_M = 0.0025;//Mie constant > thicker
 const float G_M = -0.85;
 
-float SCALE_H = 4.0 / (fOuterRadius - fInnerRadius);
-float SCALE_L = 1.0 / (fOuterRadius - fInnerRadius);
+// SCALE_H / SCALE_L are computed per invocation in main() and passed down:
+// non-constant global initializers reading uniforms are not valid core GLSL
+// at #version 410 (they were only legalised in 4.20 / 420pack).
 
 const int numOutScatter = 5;
 const float fNumOutScatter = 5.0;
@@ -77,24 +82,24 @@ float rayleighPhase( float cc ) {
 }
 
 //exp(fScaleOverScaleDepth * (fInnerRadius - fHeight));
-float density(vec3 p) {
-	return exp(-(length(p) - fInnerRadius) * SCALE_H);
+float density(vec3 p, float scaleH) {
+	return exp(-(length(p) - fInnerRadius) * scaleH);
 }
 
-float optic(vec3 p, vec3 q) {
+float optic(vec3 p, vec3 q, float scaleH, float scaleL) {
 	vec3 step = (q - p) / fNumOutScatter;
 	vec3 v = p + step * 0.5;
 
 	float sum = 0.0;
 	for(int i = 0; i < numOutScatter; i++) {
-		sum += density(v);
+		sum += density(v, scaleH);
 		v += step;
 	}
-	sum *= length(step)*SCALE_L;
+	sum *= length(step)*scaleL;
 	return sum;
 }
 
-vec3 inScatter(vec3 o, vec3 dir, vec2 e, vec3 l) {
+vec3 inScatter(vec3 o, vec3 dir, vec2 e, vec3 l, float scaleH, float scaleL) {
 	float len = (e.y - e.x) / fNumInScatter;
 	vec3 step = dir * len;
 	vec3 p = o + dir * e.x;
@@ -104,11 +109,11 @@ vec3 inScatter(vec3 o, vec3 dir, vec2 e, vec3 l) {
 	for(int i = 0; i < numInScatter; i++) {
 		vec2 f = rayIntersection(v, l, fOuterRadius);
 		vec3 u = v + l * f.y;
-		float n = (optic(p, v) + optic(v, u))*(PI * 4.0);
-		sum += density(v)* exp(-n * ( K_R * C_R + K_M ));
+		float n = (optic(p, v, scaleH, scaleL) + optic(v, u, scaleH, scaleL))*(PI * 4.0);
+		sum += density(v, scaleH)* exp(-n * ( K_R * C_R + K_M ));
 		v += step;
 	}
-	sum *= len * SCALE_L;
+	sum *= len * scaleL;
 	float c = dot(dir, -l);
 	float cc = c * c;
 	return sum * ( K_R * C_R * rayleighPhase( cc ) + K_M * miePhase( G_M, c, cc ) ) * E;
@@ -119,9 +124,9 @@ void main (void)
 	vec3 dir = rayDirection(camPosition);
 	vec3 eye = camPosition;
 
-	// direction from the fragment towards the light, same light position the
-	// planet pass uses (glGetLightPosition()) so the terminators agree
-	vec3 l = normalize(lightPos.xyz - fWorldPos.xyz);
+	float scaleH = 4.0 / (fOuterRadius - fInnerRadius);
+	float scaleL = 1.0 / (fOuterRadius - fInnerRadius);
+
 	vec2 e = rayIntersection(eye, dir, fOuterRadius);
 	if ( e.x > e.y ) {
 		discard;
@@ -134,7 +139,21 @@ void main (void)
 		discard;
 	}
 
-	vec3 I = inScatter(eye, dir, e, l);
+	// direction from the scattering path towards the light, evaluated at the
+	// path midpoint rather than at the dome fragment: the dome vertex sits on
+	// the outer shell, so using its world position parallaxes the sun
+	// direction by up to the shell thickness against the surface shading that
+	// planet.frag computes at the surface. Same light position both passes
+	// use (glGetLightPosition()) so the terminators agree.
+	vec3 l = (lightPos.w != 0.0)
+		? normalize(lightPos.xyz - shellCenter - (eye + dir * (e.x + e.y) * 0.5))
+		: normalize(lightPos.xyz);
+
+	vec3 I = inScatter(eye, dir, e, l, scaleH, scaleL);
 
 	FragColor = vec4(I, 1.0);
+	// Depth-tested (when the camera is outside) but never depth-writing:
+	// the test value must be in the log-depth scale everything else uses.
+	gl_FragDepth = clamp((log2(max(fViewDist, 0.0001)) - uLogDepth.x) / uLogDepth.y,
+	                     0.0, 1.0);
 }

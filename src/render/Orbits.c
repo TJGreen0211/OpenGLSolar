@@ -49,10 +49,15 @@ void Orbits_Draw(const ViewMatrices *vm)
 
 	glUniform1f(glGetUniformLocation(orbitShader, "uAlpha"), 0.4f);
 
+	/* The circles sit at the universe origin (the sun), so their model
+	   translation is -camera in camera-relative space. */
+	dvec3 cam = getCameraPosition();
+	vec3 sunRel = dvec3tovec3(dscalarvec3(cam, -1.0));
+
 	for(int i = 0; i < PLANET_COUNT; i++)
 	{
 		// Same circle drawPlanet() orbits on: XZ plane, planet's radius as scale.
-		mat4 m = scale(Bodies_Planets()[i].radius);
+		mat4 m = multiplymat4(translatevec3(sunRel), scale((float)Bodies_Planets()[i].radius));
 		glSetupMVP(orbitShader, m, vm, vm->frame);
 
 		glBindVertexArray(orbitVAO);

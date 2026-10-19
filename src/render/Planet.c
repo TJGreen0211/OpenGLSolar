@@ -11,10 +11,11 @@ static int    planetVertexCount;
 static GLint  planetInstancedLoc;
 static GLint  planetDispAmpLoc = -1, planetDispLodLoc = -1;
 
-// World-translation for each planet, written once per frame by Planet_Draw and
-// read by the ring/moon/atmosphere passes (which still sit in Main.c until
-// their own steps move them). Kept here because only the planet pass computes
-// the centres.
+// Camera-relative translation for each planet (floating origin: universe
+// position minus camera, in double, downcast once), written once per frame by
+// Planet_Draw and read by the ring/moon/atmosphere passes (which still sit in
+// Main.c until their own steps move them). Kept here because only the planet
+// pass computes the centres.
 static mat4   planetTransform[PLANET_COUNT];
 
 // Bodies with real oceans get the water-specular treatment in planet.frag
@@ -74,12 +75,14 @@ void Planet_Draw(const ViewMatrices *vm)
 	glUseProgram(planetShader);
 	glSetupPlanetLighting(planetShader);
 	Planet_SetInstanced(1);
+	dvec3 cam = getCameraPosition();
 	for(int i = 0; i < PLANET_COUNT; i++)
 	{
-		vec3 translation;
-		translation.x = Bodies_Planets()[i].radius * (float)cos(Bodies_OrbitSpeed(i));
-		translation.y = 0.0;
-		translation.z = Bodies_Planets()[i].radius * (float)sin(Bodies_OrbitSpeed(i));
+		/* Camera-relative centre: subtracted in double, downcast once. The
+		   float matrix never carries a universe-scale magnitude. */
+		dvec3 body = Bodies_PlanetWorldPosition(i);
+		dvec3 rel = dsubvec3(body, cam);
+		vec3 translation = dvec3tovec3(rel);
 		mat4 matT = multiplymat4(translatevec3(translation), scale(Bodies_Planets()[i].size));
 		mat4 matR = multiplymat4(rotateY(Bodies_RotationSpeed(i)), rotateX(Bodies_Planets()[i].axialTilt+45.0f));
 		mat4 m = multiplymat4(matT,matR);
@@ -102,12 +105,14 @@ void Planet_Draw(const ViewMatrices *vm)
     	// relative to the body centre, the space the shell spheres use.
     	int hasAtmo = Bodies_Planets()[i].createAtmosphere &&
     	              Bodies_Atmospheres()[i].scaleFactor > 1.0f;
-    	vec3 camPos = getCameraPosition();
     	glUniform1f(glGetUniformLocation(planetShader, "hasAtmosphere"), hasAtmo ? 1.0f : 0.0f);
     	glUniform1f(glGetUniformLocation(planetShader, "fInnerRadius"), Bodies_Planets()[i].size);
     	glUniform1f(glGetUniformLocation(planetShader, "fOuterRadius"), Bodies_Planets()[i].size * Bodies_Atmospheres()[i].scaleFactor);
     	glUniform3f(glGetUniformLocation(planetShader, "C_R"), Bodies_Atmospheres()[i].C_R.x, Bodies_Atmospheres()[i].C_R.y, Bodies_Atmospheres()[i].C_R.z);
-    	glUniform3f(glGetUniformLocation(planetShader, "camLocalPos"), camPos.x - translation.x, camPos.y - translation.y, camPos.z - translation.z);
+		// camera minus body centre in double, then downcast (= -rel)
+		glUniform3f(glGetUniformLocation(planetShader, "camLocalPos"), -translation.x, -translation.y, -translation.z);
+		// the planet's vLocalPos is already centred on the shell centre
+		glUniform3f(glGetUniformLocation(planetShader, "shellOffset"), 0.0f, 0.0f, 0.0f);
 
     	// Height-derived-from-normal-map vertex displacement for this body.
     	glUniform1f(planetDispAmpLoc, Bodies_Planets()[i].dispScale);

@@ -4,8 +4,8 @@
 
 // World-space radius of the sun's billboard (its on-screen size is this value
 // projected at the sun's distance, so the sun shrinks as the camera pulls
-// back). Tune larger for a bigger sun, smaller for a smaller one.
-const float SUN_GLOW_RADIUS = 3000.0f;
+// back). Tuned for the 1000x scene scale.
+const float SUN_GLOW_RADIUS = 3000000.0f;
 
 static GLuint sunTexture;
 static GLuint sunNormal;
@@ -51,6 +51,10 @@ static void setupSunUniforms(const ViewMatrices *vm, GLfloat uDisc)
 {
 	glUniformMatrix4fv(glGetUniformLocation( sunShader, "projection" ), 1, GL_FALSE, &vm->proj.m[0][0]);
 	glUniformMatrix4fv(glGetUniformLocation( sunShader, "view" ), 1, GL_FALSE, &vm->view.m[0][0]);
+	glUploadLogDepth(sunShader);
+	/* The sun sits at the universe origin: the shader projects it from its
+	   camera-relative position (floating origin), not from the origin. */
+	glUploadSunPos(sunShader);
 	glUniform1f(glGetUniformLocation(sunShader, "sunRadius"), SUN_GLOW_RADIUS);
 	glUniform1f(glGetUniformLocation(sunShader, "systemTime"), (float)glfwGetTime());
 
@@ -81,7 +85,7 @@ void Sun_DrawDisc(const ViewMatrices *vm)
 	setupSunUniforms(vm, 1.0f);
 
 	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LESS);
+	glDepthFunc(GL_LEQUAL);
 	glDepthMask(GL_TRUE);
 	glDisable(GL_BLEND);
 
@@ -98,7 +102,7 @@ void Sun_DrawGlow(const ViewMatrices *vm)
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_ONE, GL_ONE);
-	glDepthFunc(GL_LESS);
+	glDepthFunc(GL_LEQUAL);
 	glDepthMask(GL_FALSE);
 
 	drawSunQuadPass();

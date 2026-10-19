@@ -305,7 +305,10 @@ static int traverseFace(mat4 model, const int *order, float negate, vec3 camPos,
 
 void QuadTree_DrawSphere(mat4 model, float radius)
 {
-	vec3 camPos = getCameraPosition();
+	/* Floating origin: the model matrices handed to this pass are already
+	   camera-relative, so the camera sits at the origin of the same space
+	   and the LOD walk compares node centres against (0,0,0). */
+	vec3 camPos = {0.0f, 0.0f, 0.0f};
 	float level0 = radius * QT_LEVEL_PER_RADIUS;
 
 	/* Patch skirts must render double-sided, so culling is off entirely for

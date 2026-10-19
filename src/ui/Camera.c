@@ -6,15 +6,15 @@ const float toRadians = (float)(M_PI / 180.0f);
 #define ARCBALL_RADIUS 1.0f
 
 /* Orbit radius: how far the camera sits from the pivot the scene rotates
-   around. The old camera orbited at distance 1 (inside the sun); 5000
-   frames the inner planets at the default 45 deg FOV. Scroll dollies this
-   between 0 (camera at the pivot) and the fixed maximum below. */
-extern float CameraDistance = 5000.0f;
-extern const float CameraDistanceMax = 25000.0f;
-extern GLfloat MovementSpeed = 5000.0f;
+   around. The scene is the 1000x scale (default 5e6 frames the inner planets
+   at the default 45 deg FOV). Scroll dollies this between 0 (camera at the
+   pivot) and the fixed maximum below. */
+extern float CameraDistance = 5000000.0f;
+extern const float CameraDistanceMax = 25000000.0f;
+extern GLfloat MovementSpeed = 5000000.0f;
 /* Orbit dolly per scroll notch, in world units (the old hardcoded
    CameraDistanceMax * 0.06f). The UI slider adjusts this live. */
-extern GLfloat CameraScrollSpeed = 1500.0f;
+extern GLfloat CameraScrollSpeed = 1500000.0f;
 
 /* Quaternion per the arcball article: cosine is the cosine of half the
    rotation angle, axis is the unit rotation axis scaled by the sine of
@@ -59,17 +59,19 @@ static Arcball arcball = {
 	{0.0f, 0.0f, 0.0f}
 };
 
-static vec3 Pivot = {0.0f, 0.0f, 0.0f};
+static dvec3 Pivot = {0.0, 0.0, 0.0};
 static int dragging = 0;
 
 /* Pivot accessors: the planet-follow feature in Main.c eases Pivot toward
-   the followed body each frame without reaching into this file. */
-vec3 getCameraPivot()
+   the followed body each frame without reaching into this file. The pivot
+   is an absolute universe coordinate in double: WASD accumulation and
+   follow easing never quantize against the scene scale. */
+dvec3 getCameraPivot()
 {
     return Pivot;
 }
 
-void setCameraPivot(vec3 pivot)
+void setCameraPivot(dvec3 pivot)
 {
     Pivot = pivot;
 }
@@ -166,29 +168,24 @@ mat4 getViewRotation()
 	return r;
 }
 
-mat4 getViewPosition()
-{
-	mat4 r = getViewRotation();
-	/* t is the translation that puts the pivot d units straight ahead on
-	   the view axis: R * (pivot + t) == (0, 0, -d). */
-	float tx = -CameraDistance * r.m[2][0] - Pivot.x;
-	float ty = -CameraDistance * r.m[2][1] - Pivot.y;
-	float tz = -CameraDistance * r.m[2][2] - Pivot.z;
-	return translate(tx, ty, tz);
-}
-
+/* Floating-origin view matrix: a pure rotation. Every world position reaching
+   the GPU has already had the camera position subtracted on the CPU in double,
+   so the camera sits at exactly the origin and no translation (whose size
+   would re-quantize against the scene scale) enters the float pipeline.
+   Algebraically identical to the old R * translate(-cam) applied to absolute
+   positions: R*(v - cam) == R*v_rel. */
 mat4 getViewMatrix()
 {
-	return multiplymat4(getViewRotation(), getViewPosition());
+	return getViewRotation();
 }
 
-vec3 getCameraPosition()
+dvec3 getCameraPosition()
 {
 	mat4 r = getViewRotation();
-	vec3 c;
-	c.x = CameraDistance * r.m[2][0] + Pivot.x;
-	c.y = CameraDistance * r.m[2][1] + Pivot.y;
-	c.z = CameraDistance * r.m[2][2] + Pivot.z;
+	dvec3 c;
+	c.x = Pivot.x + CameraDistance * r.m[2][0];
+	c.y = Pivot.y + CameraDistance * r.m[2][1];
+	c.z = Pivot.z + CameraDistance * r.m[2][2];
 	return c;
 }
 
@@ -212,14 +209,14 @@ void processKeyboard(enum Camera_Movement direction, GLfloat deltaTime)
 	GLfloat velocity = MovementSpeed * deltaTime;
 	updateCameraVectors();
 
-    if (direction == FORWARD)
-        Pivot = plusequalvec3(Pivot, scalarMultvec3(Front, velocity));
-    if (direction == BACKWARD)
-        Pivot = minusequalvec3(Pivot, scalarMultvec3(Front, velocity));
-    if (direction == LEFT)
-        Pivot = minusequalvec3(Pivot, scalarMultvec3(Right, velocity));
-    if (direction == RIGHT)
-        Pivot = plusequalvec3(Pivot, scalarMultvec3(Right, velocity));
+	if (direction == FORWARD)
+		Pivot = daddvec3(Pivot, (dvec3){Front.x * velocity, Front.y * velocity, Front.z * velocity});
+	if (direction == BACKWARD)
+		Pivot = dsubvec3(Pivot, (dvec3){Front.x * velocity, Front.y * velocity, Front.z * velocity});
+	if (direction == LEFT)
+		Pivot = dsubvec3(Pivot, (dvec3){Right.x * velocity, Right.y * velocity, Right.z * velocity});
+	if (direction == RIGHT)
+		Pivot = daddvec3(Pivot, (dvec3){Right.x * velocity, Right.y * velocity, Right.z * velocity});
 }
 
 void processMousePress(GLFWwindow *window)

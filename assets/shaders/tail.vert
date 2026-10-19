@@ -15,6 +15,7 @@ uniform float uTailWidth;  // fan half-width at the tip (proportional to length)
 
 out vec2  fUv;
 out float fAlpha;
+out float fViewDist;   // view-space distance ahead of the camera
 
 void main()
 {
@@ -40,6 +41,7 @@ void main()
                        + camUp    * (aCorner.y * aSizeAlpha.x);
 
 	gl_Position = vec4(wp, 1.0) * view * projection;
+	fViewDist = gl_Position.w;
 
 	fUv = aCorner;                     // -0.5..0.5, centre at (0,0)
 	fAlpha = aSizeAlpha.y * (1.0 - frac);  // fade toward the tip

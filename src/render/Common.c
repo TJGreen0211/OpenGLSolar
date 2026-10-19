@@ -111,6 +111,23 @@ GLfloat frameCount()
 static int   mvpLastProg = -1, mvpLastFrame = -1;
 static GLint mvpLProj, mvpLModel, mvpLView;
 
+/* Logarithmic depth parameters: gl_FragDepth = (log2(viewDist) - x) / y with
+   x = log2(near) and y = log2(far) - log2(near), mapping near->0, far->1.
+   Set once per frame from the dynamic projection, uploaded next to the
+   projection matrix. */
+static float gLogDepth[2] = { 0.0f, 20.0f };
+
+void glSetLogDepth(float zNear, float zFar)
+{
+	gLogDepth[0] = log2f(zNear);
+	gLogDepth[1] = log2f(zFar) - gLogDepth[0];
+}
+
+void glUploadLogDepth(GLuint shader)
+{
+	glUniform2f(glGetUniformLocation(shader, "uLogDepth"), gLogDepth[0], gLogDepth[1]);
+}
+
 /* proj/view are identical for every call in a frame; only model differs. Keying
    the cache on (program, frame) uploads proj/view once per program per frame.
    Never drop the frame key: a mid-frame program switch must
@@ -124,6 +141,7 @@ void glSetupMVP(GLuint shader, mat4 model, const ViewMatrices *vm, int frame)
 		mvpLModel  = glGetUniformLocation( shader, "model" );
 		glUniformMatrix4fv(mvpLProj, 1, GL_FALSE, &vm->proj.m[0][0]);
 		glUniformMatrix4fv(mvpLView, 1, GL_FALSE, &vm->view.m[0][0]);
+		glUploadLogDepth(shader);
 		mvpLastProg  = shader;
 		mvpLastFrame = frame;
 	}
@@ -137,8 +155,24 @@ void bindTexture(GLuint activeTex, GLuint tex) {
 
 vec4 glGetLightPosition(void)
 {
-    vec4 light_position = {0.0f, 0.0f, 1.0f, 1.0f};
+    /* The scene light sits at (0,0,1) in universe coordinates (the sun proxy
+       the terminators agree on). Every shader space is camera-relative under
+       floating-origin rendering, so the subtractable point form requires it
+       relative to the camera too: the shader's (lightPos - worldRel) equals
+       the old (lightPos_world - world). */
+    dvec3 cam = getCameraPosition();
+    vec4 light_position = {(float)(0.0 - cam.x), (float)(0.0 - cam.y),
+                          (float)(1.0 - cam.z), 1.0};
     return light_position;
+}
+
+void glUploadSunPos(GLuint program)
+{
+    /* The sun sits at the universe origin; shaders that light from it in a
+       camera-relative space need it as -camera. */
+    dvec3 cam = getCameraPosition();
+    glUniform3f(glGetUniformLocation(program, "uSunPos"),
+        (float)(0.0 - cam.x), (float)(0.0 - cam.y), (float)(0.0 - cam.z));
 }
 
 void glSetupPlanetLighting(GLuint program)
@@ -167,9 +201,9 @@ void glSetupPlanetLighting(GLuint program)
 	glUniform4fv( glGetUniformLocation(program, "lightPos"), 1, (float*)(&light_position) );
 	glUniform1f ( glGetUniformLocation(program, "shininess"), material_shininess );
 
-	// World-space camera for the per-fragment view vector in planet.frag.
-	vec3 cam = getCameraPosition();
-	glUniform3f( glGetUniformLocation(program, "camPos"), cam.x, cam.y, cam.z );
+	// Camera-relative render space: the camera sits exactly at the origin
+	// (floating origin), so the fragment->camera vector is just -worldPos.
+	glUniform3f( glGetUniformLocation(program, "camPos"), 0.0f, 0.0f, 0.0f );
 }
 
 // Deterministic shared LCG (same constants as the old beltRand). Belts and

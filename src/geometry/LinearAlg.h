@@ -33,8 +33,29 @@ typedef struct vec2 {
 	float x, y;
 } vec2;
 
+/* Double-precision types for CPU-side universe coordinates (camera-relative
+   rendering). The GPU never sees these: absolute positions live here, the
+   camera position is subtracted in double, and only the (small) difference is
+   downcast to the float vec3/mat4 that go to OpenGL. */
+typedef struct dvec3 {
+	double x, y, z;
+} dvec3;
+
+typedef struct dmat4 {
+	double m[4][4];
+} dmat4;
+
 extern mat4 IDENTITY_MATRIX;
 extern mat4 ZERO_MATRIX;
+
+dvec3 dsubvec3(dvec3 v, dvec3 u);
+dvec3 daddvec3(dvec3 v, dvec3 u);
+dvec3 dscalarvec3(dvec3 v, double s);
+vec3 dvec3tovec3(dvec3 v);
+dmat4 dtranslatevec3(dvec3 v);
+dmat4 dmultiplymat4(dmat4 c, dmat4 d);
+dmat4 dmat4frommat4(mat4 a);
+mat4 dmat4tomat4(dmat4 a);
 
 vec4 addvec4(vec4 v, vec4 u);
 vec3 addvec3(vec3 v, vec3 u);

@@ -16,6 +16,7 @@ out vec3 vWorldPos;
 
 out vec4 TexCoords;
 out vec3 vLocalPos;
+out float fViewDist;   // view-space distance ahead of the camera (clip.w)
 
 uniform mat4 model;
 uniform mat4 view;
@@ -88,6 +89,7 @@ void main()
 	}
 
 	gl_Position = fPosition*model*view*projection;
+	fViewDist = gl_Position.w;
 	// Body-local position (world minus body centre): the centre is the model
 	// matrix translation column model[0][3]..model[2][3] (row-vector
 	// convention; model[3][0..2] is always zero). Used for the atmospheric

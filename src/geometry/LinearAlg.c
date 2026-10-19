@@ -39,6 +39,84 @@ mat2 ZERO_MATRIX_2 = {{
 	{0.0, 0.0}
 }};
 
+dvec3 dsubvec3(dvec3 v, dvec3 u)
+{
+	dvec3 temp = {v.x - u.x, v.y - u.y, v.z - u.z};
+	return temp;
+}
+
+dvec3 daddvec3(dvec3 v, dvec3 u)
+{
+	dvec3 temp = {v.x + u.x, v.y + u.y, v.z + u.z};
+	return temp;
+}
+
+dvec3 dscalarvec3(dvec3 v, double s)
+{
+	dvec3 temp = {v.x * s, v.y * s, v.z * s};
+	return temp;
+}
+
+vec3 dvec3tovec3(dvec3 v)
+{
+	vec3 temp = {(float)v.x, (float)v.y, (float)v.z};
+	return temp;
+}
+
+/* The single downcast point: camera-relative quantities are computed in
+   double and converted to float only here, immediately before upload. */
+mat4 dmat4tomat4(dmat4 a)
+{
+	mat4 out = ZERO_MATRIX;
+	for (int i = 0; i < 4; i++)
+		for (int j = 0; j < 4; j++)
+			out.m[i][j] = (float)a.m[i][j];
+	return out;
+}
+
+dmat4 dmat4frommat4(mat4 a)
+{
+	dmat4 out = {{
+		{0.0, 0.0, 0.0, 0.0},
+		{0.0, 0.0, 0.0, 0.0},
+		{0.0, 0.0, 0.0, 0.0},
+		{0.0, 0.0, 0.0, 0.0}
+	}};
+	for (int i = 0; i < 4; i++)
+		for (int j = 0; j < 4; j++)
+			out.m[i][j] = a.m[i][j];
+	return out;
+}
+
+dmat4 dtranslatevec3(dvec3 v)
+{
+	dmat4 c = {{
+		{1.0, 0.0, 0.0, v.x},
+		{0.0, 1.0, 0.0, v.y},
+		{0.0, 0.0, 1.0, v.z},
+		{0.0, 0.0, 0.0, 1.0}
+	}};
+	return c;
+}
+
+dmat4 dmultiplymat4(dmat4 c, dmat4 d)
+{
+	dmat4 out = {{
+		{0.0, 0.0, 0.0, 0.0},
+		{0.0, 0.0, 0.0, 0.0},
+		{0.0, 0.0, 0.0, 0.0},
+		{0.0, 0.0, 0.0, 0.0}
+	}};
+	for (int i = 0; i < 4; ++i) {
+		for (int j = 0; j < 4; ++j) {
+			for (int k = 0; k < 4; ++k) {
+				out.m[i][j] += c.m[i][k] * d.m[k][j];
+			}
+		}
+	}
+	return out;
+}
+
 vec4 addvec4(vec4 v, vec4 u)
 {
 	vec4 temp = {v.x + u.x, v.y + u.y, v.z + u.z, v.w + u.w,};

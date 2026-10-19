@@ -19,12 +19,14 @@ extern GLfloat MovementSpeed;
 extern GLfloat CameraScrollSpeed;
 
 mat4 getViewMatrix();
-mat4 getViewPosition();
 mat4 getViewRotation();
 
-vec3 getCameraPosition();
-vec3 getCameraPivot();
-void setCameraPivot(vec3 pivot);
+/* Absolute (universe) camera/pivot position in double: never hand these to
+   the GPU. Subtract them from world positions in double and downcast only
+   the difference (see LinearAlg.h dvec3). */
+dvec3 getCameraPosition();
+dvec3 getCameraPivot();
+void setCameraPivot(dvec3 pivot);
 
 void updateCameraVectors();
 void processKeyboard(enum Camera_Movement direction, GLfloat deltaTime);

@@ -8,24 +8,47 @@ void Moon_Draw(const ViewMatrices *vm)
 {
 	glUseProgram(Planet_Shader());
 	glSetupPlanetLighting(Planet_Shader());
-	// Moons have no shell of their own; clear the atmosphere flag the planet
-	// pass left on the shared program so no extinction is applied, and clear
-	// instanced mode so the plain tetrahedron mesh draws without the
-	// quad-tree instance transform.
-	glUniform1f(glGetUniformLocation(Planet_Shader(), "hasAtmosphere"), 0.0f);
 	glUniform1f(glGetUniformLocation(Planet_Shader(), "waterSpec"), 0.0f);
+	// clear instanced mode so the plain tetrahedron mesh draws without the
+	// quad-tree instance transform.
 	Planet_SetInstanced(0);
+	dvec3 cam = getCameraPosition();
 	int c = 0;
 	for(int i = 0; i < 11; i++)
 	{
+		if (Bodies_Planets()[i].numMoons == 0) {
+			continue;
+		}
+		// Moons have no shell of their own but sit in (or beyond) their
+		// parent's: apply the parent body's atmosphere uniforms so a moon
+		// inside the shell gets fogged like the planet surface, and one
+		// beyond it still gets the shell chord's fog and in-scatter.
+		// shellOffset carries each moon's offset from the parent centre so
+		// planet.frag builds the extinction ray in the shell-centred frame.
+		int hasAtmo = Bodies_Planets()[i].createAtmosphere &&
+		              Bodies_Atmospheres()[i].scaleFactor > 1.0f;
+		glUniform1f(glGetUniformLocation(Planet_Shader(), "hasAtmosphere"), hasAtmo ? 1.0f : 0.0f);
+		glUniform1f(glGetUniformLocation(Planet_Shader(), "fInnerRadius"), Bodies_Planets()[i].size);
+		glUniform1f(glGetUniformLocation(Planet_Shader(), "fOuterRadius"), Bodies_Planets()[i].size * Bodies_Atmospheres()[i].scaleFactor);
+		glUniform3f(glGetUniformLocation(Planet_Shader(), "C_R"), Bodies_Atmospheres()[i].C_R.x, Bodies_Atmospheres()[i].C_R.y, Bodies_Atmospheres()[i].C_R.z);
+		glUniform1f(glGetUniformLocation(Planet_Shader(), "E"), Bodies_Atmospheres()[i].E);
+		// Camera relative to the parent centre: camera is the origin of the
+		// camera-relative space, so it is just -planetTransform.
+		const mat4 *parentT = &Planet_Transforms()[i];
+		glUniform3f(glGetUniformLocation(Planet_Shader(), "camLocalPos"),
+			-parentT->m[0][3], -parentT->m[1][3], -parentT->m[2][3]);
 		for(int j = 0; j < Bodies_Planets()[i].numMoons; j++)
 		{
-			vec3 translation;
-			translation.x = (Bodies_Moons()[c].radius + Bodies_Planets()[i].size) * (float)cos(Bodies_MoonOrbitSpeed(c));
-			translation.y = 0.0;
-			translation.z = (Bodies_Moons()[c].radius + Bodies_Planets()[i].size) * (float)sin(Bodies_MoonOrbitSpeed(c));
+			// Universe-accurate moon centre in double (parent centre plus
+			// orbit offset), then camera-relative and downcast once.
+			dvec3 moonWorld = Bodies_MoonWorldPosition(c);
+			dvec3 rel = dsubvec3(moonWorld, cam);
+			vec3 translation = dvec3tovec3(rel);
+			dvec3 shellOff = dsubvec3(moonWorld, Bodies_PlanetWorldPosition(i));
+			glUniform3f(glGetUniformLocation(Planet_Shader(), "shellOffset"),
+				(float)shellOff.x, (float)shellOff.y, (float)shellOff.z);
 
-			mat4 m = multiplymat4(multiplymat4(Planet_Transforms()[i], translatevec3(translation)), scale(Bodies_Moons()[c].size));
+			mat4 m = multiplymat4(translatevec3(translation), scale(Bodies_Moons()[c].size));
 
 			glSetupMVP(Planet_Shader(), m, vm, vm->frame);
 

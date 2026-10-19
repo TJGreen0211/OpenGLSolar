@@ -35,11 +35,19 @@ GLuint loadTexture(char const * path);
 // frame (cache in Common.c); model goes up on every call. proj/view are taken
 // explicitly (const ViewMatrices*) instead of the app's global p/v.
 void glSetupMVP(GLuint shader, mat4 model, const ViewMatrices *vm, int frame);
+// Logarithmic depth: glSetLogDepth(near, far) once per frame; glSetupMVP
+// uploads uLogDepth with proj/view, and the direct-upload passes (belt, tail,
+// sun) call glUploadLogDepth themselves.
+void glSetLogDepth(float zNear, float zFar);
+void glUploadLogDepth(GLuint shader);
 void bindTexture(GLuint activeTex, GLuint tex);
 void glSetupPlanetLighting(GLuint program);
-// The single scene light position (world space). The planet pass uploads it as
-// lightPos and the atmosphere pass reads it so their terminators agree.
+// The single scene light position (camera-relative). The planet pass uploads
+// it as lightPos and the atmosphere pass reads it so their terminators agree.
 vec4 glGetLightPosition(void);
+// Uploads the sun (universe origin) as the vec3 uniform `uSunPos` for shaders
+// that light from it directly in camera-relative space (belt, comet, ring).
+void glUploadSunPos(GLuint program);
 // Shared deterministic LCG for scene layout (belt + comet). Both must draw from
 // the same instance so their layout stays bit-reproducible.
 float SceneRand(void);

@@ -10,7 +10,10 @@ in vec3 fN;
 in vec3 vWorldPos;
 in vec4 TexCoords;
 in vec3 vLocalPos;
+in float fViewDist;   // view-space distance ahead of the camera
 out vec4 FragColor;
+
+uniform vec2 uLogDepth; // log2(near), log2(far)-log2(near): see Common.c
 
 uniform vec4 ambientProduct, diffuseProduct, specularProduct;
 uniform vec4 lightPos;   // world space; w != 0 -> positional, w == 0 -> dir
@@ -23,21 +26,26 @@ uniform float waterSpec;
 uniform sampler2D tex;
 uniform sampler2D normalTex;
 
-// Atmospheric extinction (out-scattering): the body's own atmosphere dims the
-// surface by the transmittance along the surface->camera path through the
-// shell. Constants and the 4*PI optical-depth convention must match
-// atmosphere.frag so dome in-scatter and planet fog agree.
+// Atmospheric extinction dims the surface by transmittance along the
+// surface-to-camera path. The atmosphere dome pass adds in-scattered light
+// over both the limb and the planet disc; adding it here as well would count
+// that radiance twice.
 uniform float hasAtmosphere;
 uniform float fInnerRadius;
 uniform float fOuterRadius;
 uniform vec3 C_R;
 uniform vec3 camLocalPos;
+// Where the vLocalPos frame origin sits relative to the shell centre: zero
+// for the planet itself; for a moon drawn through this shader it is the
+// moon's offset from its parent centre, applying the parent's shell.
+uniform vec3 shellOffset;
 
 const float PI = 3.14159265359;
-const float MAX = 10000.0;
+// Keep the miss sentinel beyond the largest supported shell radius.
+const float MAX = 1e30;
 const float K_R = 0.166;
 const float K_M = 0.0025;
-const int NUM_EXTINCT_STEPS = 5;
+const int NUM_ATMO_STEPS = 5;
 
 vec2 shellIntersection(vec3 p, vec3 dir, float radius)
 {
@@ -51,40 +59,50 @@ vec2 shellIntersection(vec3 p, vec3 dir, float radius)
 	return vec2(-b - d, -b + d);
 }
 
-// Optical depth along eye->surface segment [e0, e1] of the view ray, sampled
-// like optic() in atmosphere.frag (midpoint rule, 5 steps).
-float viewOpticalDepth(vec3 eye, vec3 dir, float e0, float e1)
+float optic(vec3 p, vec3 q, float scaleH, float scaleL)
 {
-	float scaleH = 4.0 / (fOuterRadius - fInnerRadius);
-	float scaleL = 1.0 / (fOuterRadius - fInnerRadius);
-	float len = (e1 - e0) / float(NUM_EXTINCT_STEPS);
-	vec3 step = dir * len;
-	vec3 v = eye + dir * (e0 + len * 0.5);
-
+	vec3 step = (q - p) / float(NUM_ATMO_STEPS);
+	vec3 v = p + step * 0.5;
 	float sum = 0.0;
-	for (int i = 0; i < NUM_EXTINCT_STEPS; i++) {
+	for (int i = 0; i < NUM_ATMO_STEPS; i++) {
 		sum += exp(-(length(v) - fInnerRadius) * scaleH);
 		v += step;
 	}
-	return sum * length(step) * scaleL * (4.0 * PI);
+	return sum * length(step) * scaleL;
 }
 
-vec3 atmosphericExtinction()
+vec3 applyAtmosphere(vec3 color)
 {
-	vec3 dir = normalize(vLocalPos - camLocalPos);
-	vec2 e = shellIntersection(camLocalPos, dir, fOuterRadius);
+	float scaleH = 4.0 / (fOuterRadius - fInnerRadius);
+	float scaleL = 1.0 / (fOuterRadius - fInnerRadius);
+
+	// Ray in the shell-centred frame: eye = camera, fragment at distance tFrag.
+	vec3 eye = camLocalPos;
+	vec3 fragS = vLocalPos + shellOffset;
+	vec3 ray = fragS - eye;
+	float tFrag = length(ray);
+	vec3 dir = ray / max(tFrag, 1e-6);
+
+	vec2 e = shellIntersection(eye, dir, fOuterRadius);
 	if (e.x > e.y) {
-		return vec3(1.0); // view ray misses the shell entirely
+		return color; // view ray misses the shell entirely
 	}
-	vec2 f = shellIntersection(camLocalPos, dir, fInnerRadius);
-	e.y = min(e.y, f.x);
+	vec2 f = shellIntersection(eye, dir, fInnerRadius);
+	// Clip the path at the shell exit, the inner sphere, and the actual
+	// fragment hit: the tFrag term handles a moon in front of its parent's
+	// shell (no path -> no fog) and displaced surfaces, where f.x would
+	// overshoot or fall short of the visible surface.
+	e.y = min(e.y, min(f.x, tFrag));
 	// camera inside the shell: the path starts at the camera
 	e.x = max(e.x, 0.0);
 	if (e.y <= e.x) {
-		return vec3(1.0);
+		return color;
 	}
-	float tau = viewOpticalDepth(camLocalPos, dir, e.x, e.y);
-	return exp(-(K_R * C_R + K_M) * tau);
+
+	float tau = optic(eye + dir * e.x, eye + dir * e.y, scaleH, scaleL) * (4.0 * PI);
+	color *= exp(-(K_R * C_R + K_M) * tau);
+
+	return color;
 }
 
 void main()
@@ -144,10 +162,15 @@ void main()
 
 	FragColor = vec4(ambient + diffuse + specular, 1.0);
 
-	// out-scattering: the dome pass adds the in-scattered sky on top of this
-	// (its ray is clipped at the surface), so the surface itself is only
-	// attenuated here -- no double counting, inside or outside the shell
+	// Surface extinction only; the atmosphere dome owns all in-scattered
+	// radiance so the scattering is not composited twice over the body.
 	if (hasAtmosphere > 0.5) {
-		FragColor.rgb *= atmosphericExtinction();
+		FragColor.rgb = applyAtmosphere(FragColor.rgb);
 	}
+
+	// Logarithmic depth (dynamic near/far + log mapping): the scene spans
+	// camera-surface to system-wide distances, and a perspective [near,far]
+	// depth cannot resolve both.
+	gl_FragDepth = clamp((log2(max(fViewDist, 0.0001)) - uLogDepth.x) / uLogDepth.y,
+	                     0.0, 1.0);
 }

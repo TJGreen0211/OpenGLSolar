@@ -44,7 +44,11 @@ int actionPress;
    comets, rings, atmosphere shells); the skybox and UI keep fill mode. */
 int wireframeMode = 0;
 
-float zNear = 0.5, zFar = 100000.0;
+/* zNear stays small and fixed: the logarithmic depth buffer distributes its
+   precision over log2(far/near), so a small near plane costs nothing, and a
+   fixed one never clips geometry the camera flies into. zFar follows the
+   camera so the frustum always bounds the whole system. */
+float zNear = 0.05f, zFar = 100000.0f;
 
 mat4 p, v;
 
@@ -99,8 +103,8 @@ void updateBodies(float dDays)
 {
 	double d = SimTime_Days();
 	Bodies_Update(d);
-	Belt_SetSimTime((float)d);
-	Comet_UpdateAll(dDays);
+	Belt_SetSimTime(d);
+	Comet_UpdateAll((double)dDays);
 }
 
 // ---------------------------------------------------------------------------
@@ -137,11 +141,38 @@ void init()
 	fprintf(stderr, "[trace] init: done\n");
 
     glEnable(GL_DEPTH_TEST);
+    /* Logarithmic depth (see createPerspectiveMatrix + the *_DepthWrite*
+       blocks in the shaders): the skybox lands exactly at depth 1.0 and the
+       clear value is 1.0, so passes must use LEQUAL. */
+    glDepthFunc(GL_LEQUAL);
 }
 
 void createPerspectiveMatrix()
 {
 	p = perspective(45.0f, ASPECT, zNear, zFar);
+	glSetLogDepth(zNear, zFar);
+}
+
+/* Rebuild the projection each frame with a far plane that bounds the whole
+   system from the camera (plus margin). Log depth makes the far plane free
+   in precision, and this keeps the orbit rings and distant Kuiper belt
+   inside the frustum at any scale. */
+void updateDynamicProjection()
+{
+	static double maxOrbit = 0.0;
+	if (maxOrbit == 0.0)
+	{
+		const planetParameters *pp = Bodies_Planets();
+		for (int i = 0; i < PLANET_COUNT; i++)
+			if (pp[i].radius > maxOrbit)
+				maxOrbit = pp[i].radius;
+	}
+	dvec3 cam = getCameraPosition();
+	/* `far` is a windows.h macro — use farPlane. */
+	double farPlane = sqrt(cam.x * cam.x + cam.y * cam.y + cam.z * cam.z)
+	                + maxOrbit * 1.1 + 1000.0;
+	zFar = (float)farPlane;
+	createPerspectiveMatrix();
 }
 
 #ifdef _WIN32
@@ -191,6 +222,8 @@ GLFWwindow *setupGLFW() {
 	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	glfwWindowHint(GLFW_SAMPLES, 2);
+	/* Logarithmic depth wants as many depth bits as offered. */
+	glfwWindowHint(GLFW_DEPTH_BITS, 24);
 
 	fprintf(stderr, "[trace] glfw: creating window\n");
 	/* Bordered fullscreen: normal decorated window, maximized after
@@ -375,10 +408,10 @@ void setupUIMoonButtons()
 #define UI_SLIDER_SCROLL   1
 #define UI_SLIDER_COUNT    2
 
-#define CAMERA_MOVEMENT_MIN 100.0f
-#define CAMERA_MOVEMENT_MAX 20000.0f
-#define CAMERA_SCROLL_MIN 50.0f
-#define CAMERA_SCROLL_MAX 6000.0f
+#define CAMERA_MOVEMENT_MIN 100000.0f
+#define CAMERA_MOVEMENT_MAX 20000000.0f
+#define CAMERA_SCROLL_MIN 50000.0f
+#define CAMERA_SCROLL_MAX 6000000.0f
 
 static float cameraSliderValue(float minV, float maxV, float t)
 {
@@ -427,14 +460,14 @@ void updateCameraFollow()
 	if (followTarget == UI_ACT_NONE)
 		return;
 
-	vec3 goal;
+	dvec3 goal;
 	float goalDist;
 	if (followTarget == UI_ACT_SUN)
 	{
-		goal.x = 0.0f;
-		goal.y = 0.0f;
-		goal.z = 0.0f;
-		goalDist = 5000.0f;
+		goal.x = 0.0;
+		goal.y = 0.0;
+		goal.z = 0.0;
+		goalDist = 5000000.0f;
 	}
 	else if (followTarget >= UI_ACT_MOON_BASE)
 	{
@@ -449,8 +482,8 @@ void updateCameraFollow()
 	}
 
 	float k = 1.0f - expf(-6.0f * deltaTime);
-	vec3 curPivot = getCameraPivot();
-	vec3 next;
+	dvec3 curPivot = getCameraPivot();
+	dvec3 next;
 	next.x = curPivot.x + (goal.x - curPivot.x) * k;
 	next.y = curPivot.y + (goal.y - curPivot.y) * k;
 	next.z = curPivot.z + (goal.z - curPivot.z) * k;
@@ -458,8 +491,8 @@ void updateCameraFollow()
 
 	if (focusDolly)
 	{
-		if (goalDist < 10.0f)
-			goalDist = 10.0f;
+		if (goalDist < 10000.0f)
+			goalDist = 10000.0f;
 		if (goalDist > CameraDistanceMax)
 			goalDist = CameraDistanceMax;
 
@@ -566,6 +599,7 @@ int main(int argc, char *argv[])
         lastFrame = currentFrame;
         gFrame++;
         updateCameraFollow();
+        updateDynamicProjection();
         v = getViewMatrix();
         appView.proj = p;
         appView.view = v;
@@ -603,9 +637,13 @@ int main(int argc, char *argv[])
 		Orbits_Draw(&appView);
 		Rings_Draw(&appView);
 		Belt_Draw(&appView);
+		// Moons before the atmosphere dome: they are opaque depth-writing
+		// geometry, and the dome's additive in-scatter must composite over
+		// them the same way it does over planets (a moon inside a shell is
+		// fogged by planet.frag's extinction pass using its parent's shell).
+		Moon_Draw(&appView);
 		Atmosphere_Draw(&appView);
 		Comet_Draw(&appView);
-		Moon_Draw(&appView);
 		// Corona halo last: additive, no depth write, so it blends over
 		// anything behind it while still being occluded by anything in front.
 		Sun_DrawGlow(&appView);

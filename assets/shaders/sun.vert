@@ -10,6 +10,8 @@ out float sunDepth;  // sun centre's depth-buffer value in [0,1]
 uniform mat4 view;
 uniform mat4 projection;
 uniform float sunRadius;
+uniform vec3 uSunPos;   // sun (universe origin) in camera-relative space
+uniform vec2 uLogDepth; // log2(near), log2(far)-log2(near): see Common.c
 
 void main()
 {
@@ -20,7 +22,7 @@ void main()
 	fragNdc = vPosition.xy;
 	gl_Position = vec4(vPosition.xy, 0.0, 1.0);
 
-	vec4 sunView = vec4(0.0, 0.0, 0.0, 1.0) * view;
+	vec4 sunView = vec4(uSunPos, 1.0) * view;
 	if( sunView.z >= 0.0 )
 	{
 		// At or behind the camera: put the sun far off-screen so nothing draws.
@@ -40,5 +42,8 @@ void main()
 
 	sunNdc   = ndcPos;
 	sunHalf  = abs( clipR.x / clipR.w - ndcPos.x );
-	sunDepth = ( clip.z / clip.w + 1.0 ) * 0.5;
+	// Logarithmic depth (matches the scene fragment passes): clip.w is the
+	// view-space distance ahead of the camera, mapped log-uniformly to [0,1].
+	sunDepth = clamp( ( log2( max( clip.w, 1e-4 ) ) - uLogDepth.x ) / uLogDepth.y,
+	                  0.0, 1.0 );
 }

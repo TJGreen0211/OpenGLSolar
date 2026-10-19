@@ -51,10 +51,14 @@ static const float planetLonRateDegPerDay[PLANET_COUNT] = {
 // 0.001/planet.day; times OLD_TICKS_PER_DAY gives rad-per-day.
 #define SPIN_BASE_RAD_PER_DAY (0.001f * OLD_TICKS_PER_DAY)
 
-// Historical radius/size units for the builders (meters-ish scale).
-static float planetScaleMult = 100.0;
-static float planetRadMult = 2000.0;
-static float moonRadMult = 500.0;
+// Historical radius/size units for the builders (meters-ish scale), scaled
+// up 1000x: Eris orbits at 1.36e8 world units. The double-precision,
+// camera-relative pipeline (LinearAlg dvec3, floating-origin rendering)
+// resolves position detail at this scale; the per-frame relative offsets
+// handed to the GPU stay float.
+static float planetScaleMult = 100000.0;
+static float planetRadMult = 2000000.0;
+static float moonRadMult = 500000.0;
 
 // File-scope data tables and per-frame derived angles.
 static planetParameters planetInstanceArray[PLANET_COUNT];
@@ -532,22 +536,22 @@ GLuint Bodies_MoonDisplacementTexture(void)
 	return moonDisplacementTexture;
 }
 
-vec3 Bodies_PlanetWorldPosition(int i)
+dvec3 Bodies_PlanetWorldPosition(int i)
 {
-	vec3 p;
-	p.x = planetInstanceArray[i].radius * (float)cos(orbitSpeedArray[i]);
-	p.y = 0.0f;
-	p.z = planetInstanceArray[i].radius * (float)sin(orbitSpeedArray[i]);
+	dvec3 p;
+	p.x = planetInstanceArray[i].radius * cos((double)orbitSpeedArray[i]);
+	p.y = 0.0;
+	p.z = planetInstanceArray[i].radius * sin((double)orbitSpeedArray[i]);
 	return p;
 }
 
-vec3 Bodies_MoonWorldPosition(int m)
+dvec3 Bodies_MoonWorldPosition(int m)
 {
 	int p = moonInstanceArray[m].planet;
-	float r = moonInstanceArray[m].radius + planetInstanceArray[p].size;
-	vec3 off;
-	off.x = r * (float)cos(moonOrbitSpeedArray[m]);
-	off.y = 0.0f;
-	off.z = r * (float)sin(moonOrbitSpeedArray[m]);
-	return addvec3(Bodies_PlanetWorldPosition(p), off);
+	double r = (double)moonInstanceArray[m].radius + (double)planetInstanceArray[p].size;
+	dvec3 off;
+	off.x = r * cos((double)moonOrbitSpeedArray[m]);
+	off.y = 0.0;
+	off.z = r * sin((double)moonOrbitSpeedArray[m]);
+	return daddvec3(Bodies_PlanetWorldPosition(p), off);
 }

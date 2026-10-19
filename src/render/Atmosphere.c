@@ -54,9 +54,10 @@ void Atmosphere_Draw(const ViewMatrices *vm)
 			//translation.z = Bodies_Planets()[2].radius * sin(orbitSpeedArray[2]);
 
 			mat4 modelmat = Planet_Transforms()[i];
-			mat4 tv = transposemat4(multiplymat4(modelmat, getViewPosition()));
-			vec4 camMult = {-tv.m[3][0], -tv.m[3][1], -tv.m[3][2], -tv.m[3][3]};
-			vec4 camPosition = multiplymat4vec4(tv, camMult);
+			/* Floating origin: modelmat is the camera-relative planet centre
+			   and the camera sits at the origin, so the camera in the
+			   shell-centred frame is just -planetTransform. */
+			vec3 camPosition = {-modelmat.m[0][3], -modelmat.m[1][3], -modelmat.m[2][3]};
 
 			//mat4 m = multiplymat4(translatevec3(translation), scale());
 			mat4 m = multiplymat4(modelmat, scale(Bodies_Planets()[i].size*scaleFactor));
@@ -70,6 +71,10 @@ void Atmosphere_Draw(const ViewMatrices *vm)
 			glUniform3f(glGetUniformLocation(atmosphereShader, "C_R"), C_R.x, C_R.y, C_R.z);
 			glUniform1f(glGetUniformLocation(atmosphereShader, "E"), E);
 			glUniform4f(glGetUniformLocation(atmosphereShader, "lightPos"), lightPos.x, lightPos.y, lightPos.z, lightPos.w);
+			// Camera-relative body centre: modelmat is a pure translation, its
+			// translation column is the shell sphere origin (row-vector
+			// convention, m[0][3]..m[2][3])
+			glUniform3f(glGetUniformLocation(atmosphereShader, "shellCenter"), modelmat.m[0][3], modelmat.m[1][3], modelmat.m[2][3]);
 
 			glSetupMVP(atmosphereShader, m, vm, vm->frame);
 

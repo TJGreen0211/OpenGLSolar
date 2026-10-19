@@ -2,9 +2,11 @@
 
 in vec2  fUv;
 in float fAlpha;
+in float fViewDist;
 
 uniform float uTailAlpha;  // global brightness (proportional to 1/r^2)
 uniform vec3  uColor;
+uniform vec2  uLogDepth;   // log2(near), log2(far)-log2(near): see Common.c
 
 out vec4 FragColor;
 
@@ -21,4 +23,8 @@ void main()
 
 	// Drawn with glBlendFunc(GL_SRC_ALPHA, GL_ONE): dst += uColor * a.
 	FragColor = vec4(uColor, a);
+	// Depth-tested but not depth-writing (CPU side): the test value must
+	// still be in the log-depth scale everything else uses.
+	gl_FragDepth = clamp((log2(max(fViewDist, 0.0001)) - uLogDepth.x) / uLogDepth.y,
+	                     0.0, 1.0);
 }
