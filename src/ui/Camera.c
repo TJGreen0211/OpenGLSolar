@@ -101,49 +101,49 @@ static void arcballRotation(void)
 {
 	arcball.startPosUnitVector = normalizevec3(arcball.startPos);
 	arcball.currentPosUnitVector = normalizevec3(arcball.currentPos);
-	arcball.currentQuaternion.axis = crossvec3(arcball.startPos, arcball.currentPos);
-	arcball.currentQuaternion.axis = normalizevec3(arcball.currentQuaternion.axis);
-
 	arcball.cosValue = dotvec3(arcball.startPosUnitVector, arcball.currentPosUnitVector);
 	if (arcball.cosValue > 1.0f)
 		arcball.cosValue = 1.0f;
 	if (arcball.cosValue < -1.0f)
 		arcball.cosValue = -1.0f;
-	arcball.theta = acosf(arcball.cosValue) * 180.0f / (float)M_PI;
 
-	float halfAngle = (arcball.theta / 2.0f) * toRadians;
-	arcball.currentQuaternion.cosine = cosf(halfAngle);
-	arcball.currentQuaternion.axis = scalarMultvec3(arcball.currentQuaternion.axis, sinf(halfAngle));
+	/* Build the cursor-to-cursor quaternion directly. Unlike acos(dot), this
+	   retains sub-degree motion when the dot product rounds close to one. */
+	vec3 deltaAxis = crossvec3(arcball.startPosUnitVector, arcball.currentPosUnitVector);
+	if (arcball.cosValue < -0.999999f) {
+		vec3 basis = fabsf(arcball.startPosUnitVector.x) < 0.9f
+			? (vec3){1.0f, 0.0f, 0.0f}
+			: (vec3){0.0f, 1.0f, 0.0f};
+		deltaAxis = normalizevec3(crossvec3(arcball.startPosUnitVector, basis));
+		arcball.currentQuaternion.cosine = 0.0f;
+		arcball.currentQuaternion.axis = deltaAxis;
+	}
+	else {
+		float halfW = sqrtf((1.0f + arcball.cosValue) * 0.5f);
+		arcball.currentQuaternion.cosine = halfW;
+		arcball.currentQuaternion.axis = scalarMultvec3(deltaAxis, 0.5f / halfW);
+	}
 
 	/* q' = q_current * q_last */
-	arcball.cosValue_2 = (arcball.currentQuaternion.cosine * arcball.lastQuaternion.cosine)
+	vec3 combinedAxis = addvec3(
+		addvec3(scalarMultvec3(arcball.lastQuaternion.axis, arcball.currentQuaternion.cosine),
+		        scalarMultvec3(arcball.currentQuaternion.axis, arcball.lastQuaternion.cosine)),
+		crossvec3(arcball.currentQuaternion.axis, arcball.lastQuaternion.axis));
+	float combinedW = arcball.currentQuaternion.cosine * arcball.lastQuaternion.cosine
 		- dotvec3(arcball.currentQuaternion.axis, arcball.lastQuaternion.axis);
-	if (arcball.cosValue_2 > 1.0f)
-		arcball.cosValue_2 = 1.0f;
-	if (arcball.cosValue_2 < -1.0f)
-		arcball.cosValue_2 = -1.0f;
-
-	vec3 temporaryVector;
-	temporaryVector = crossvec3(arcball.currentQuaternion.axis, arcball.lastQuaternion.axis);
-
-	arcball.rotationalAxis_2.x = (arcball.currentQuaternion.cosine * arcball.lastQuaternion.axis.x)
-		+ (arcball.lastQuaternion.cosine * arcball.currentQuaternion.axis.x) + temporaryVector.x;
-	arcball.rotationalAxis_2.y = (arcball.currentQuaternion.cosine * arcball.lastQuaternion.axis.y)
-		+ (arcball.lastQuaternion.cosine * arcball.currentQuaternion.axis.y) + temporaryVector.y;
-	arcball.rotationalAxis_2.z = (arcball.currentQuaternion.cosine * arcball.lastQuaternion.axis.z)
-		+ (arcball.lastQuaternion.cosine * arcball.currentQuaternion.axis.z) + temporaryVector.z;
-
-	arcball.angle = (acosf(arcball.cosValue_2) * 180.0f / (float)M_PI) * 2.0f;
-
-	float halfScale = sinf((arcball.angle / 2.0f) * toRadians);
-	if (fabsf(halfScale) > 0.000001f)
-		arcball.rotationalAxis = dividevec3(arcball.rotationalAxis_2, halfScale);
-	else
-	{
-		arcball.rotationalAxis.x = 1.0f;
-		arcball.rotationalAxis.y = 0.0f;
-		arcball.rotationalAxis.z = 0.0f;
+	float combinedLength = sqrtf(combinedW * combinedW + dotvec3(combinedAxis, combinedAxis));
+	if (combinedLength > 0.0f) {
+		combinedW /= combinedLength;
+		combinedAxis = dividevec3(combinedAxis, combinedLength);
 	}
+
+	arcball.cosValue_2 = combinedW;
+	arcball.rotationalAxis_2 = combinedAxis;
+	float axisLength = lengthvec3(combinedAxis);
+	arcball.angle = 2.0f * atan2f(axisLength, combinedW) / toRadians;
+	arcball.rotationalAxis = axisLength > 0.0f
+		? dividevec3(combinedAxis, axisLength)
+		: (vec3){1.0f, 0.0f, 0.0f};
 }
 
 mat4 getViewRotation()

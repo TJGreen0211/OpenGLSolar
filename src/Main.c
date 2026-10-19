@@ -598,6 +598,12 @@ int main(int argc, char *argv[])
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
         gFrame++;
+		/* Apply input callbacks before taking this frame's camera snapshot.
+		   Mouse drag changes both the view rotation and camera orbit position;
+		   processing it after appView is built mixes the new camera-relative
+		   positions with the previous frame's view matrix. */
+		glfwPollEvents();
+		doMovement();
         updateCameraFollow();
         updateDynamicProjection();
         v = getViewMatrix();
@@ -612,9 +618,6 @@ int main(int argc, char *argv[])
 			fpsFrames = 0;
 			lastTime += 1.0;
 		}
-
-		glfwPollEvents();
-		doMovement();
 
 		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
